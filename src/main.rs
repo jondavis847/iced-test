@@ -135,16 +135,15 @@ impl Application for IcedTest {
                     .width(Length::FillPortion(15))
                     .height(Length::Fill);
 
-                //let button_bar = container(
-                //    button("Add Body")
-                //        .width(Length::Fill)
-                //        .on_press(Message::AddBodyClicked),
-               // )
-                //.width(Length::FillPortion(1))
-                //.height(Length::Fill);
+                let button_bar = container(
+                    button("Add Body")
+                        .width(Length::Fill)
+                        .on_press(Message::AddBodyClicked),
+                )
+                .width(Length::FillPortion(1))
+                .height(Length::Fill);
 
-                //let underlay_row = Row::new().push(button_bar).push(graph_canvas);
-                let underlay_row = Row::new().push(graph_canvas);
+                let underlay_row = Row::new().push(button_bar).push(graph_canvas);
 
                 let underlay = Container::new(underlay_row);
 

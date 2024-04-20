@@ -8,16 +8,16 @@ use iced::{
 #[derive(Debug,Clone)]
 pub struct Node {
     label: String,    
-    pub rendered_position: Point,
+    pub rendered_position: Vector,
     graph_position: Vector,
     size: Size,    
 }
 
 impl Node {
-    pub fn new(label: String, rendered_position: Point, graph_origin: Point) -> Self {        
+    pub fn new(label: String, rendered_position: Vector, translation: Vector) -> Self {        
         let height = 50.0;
         let width = 100.0;
-        let graph_position = rendered_position - graph_origin;
+        let graph_position = rendered_position - translation;
         Self {
             label: label,            
             rendered_position: rendered_position,
@@ -26,11 +26,10 @@ impl Node {
         }
     }
 
-    pub fn draw(&self, frame: &mut Frame, theme: &Theme) {  
-        //frame.translate(frame.center() - Point::ORIGIN);      
+    pub fn draw(&self, frame: &mut Frame, theme: &Theme) {          
         let node_center = Vector::new(self.size.width/2.0,self.size.height/2.0);
         let translation_vec = self.rendered_position;
-        let translation_pt = Point::new(translation_vec.x,translation_vec.y);// - node_center;
+        let translation_pt = Point::new(translation_vec.x,translation_vec.y);// - node_center;        
 
         let palette = theme.extended_palette();        
         let background = Path::rectangle(translation_pt, self.size);
@@ -47,5 +46,9 @@ impl Node {
                 ..Text::default()
             });        
         });
+    }
+
+    pub fn translate_rendered_position(&mut self, canvas_translation: Vector) {
+        self.rendered_position = self.graph_position + canvas_translation;        
     }
 }

@@ -6,19 +6,21 @@ use iced::{
             event::{Event, Status},
             Cache, Canvas as IcedCanvas, Geometry, Path, Stroke,
         },
-        container,Container
+        container, Container,
     },
-    Element, Length, Point, Rectangle, Renderer, Theme, Vector,
+    Length, Point, Rectangle, Renderer, Theme, Vector,
 };
 
 use crate::graph::node::Node;
 use crate::Message;
 
 #[derive(Debug, Default)]
-pub struct Canvas {
+pub struct Canvas {    
+    pub cache: Cache, 
     pub nodes: Vec<Node>,
-    pub cache: Cache,
-    pub origin: Point,
+    pub last_mouse_position: Point,
+    pub translation: Vector,
+    pub zoom_scaling: f32,    
 }
 
 impl Canvas {
@@ -31,11 +33,10 @@ impl Canvas {
                 .width(Length::Fill)
                 .height(Length::Fill),
         )
-        
     }
 
-    pub fn add_node(&mut self, label: String, rendered_position: Point) {
-        let node = Node::new(label, rendered_position, self.origin);
+    pub fn add_node(&mut self, label: String, rendered_position: Vector) {
+        let node = Node::new(label, rendered_position, self.translation);
         self.nodes.push(node);
         self.request_redraw();
     }
@@ -43,34 +44,22 @@ impl Canvas {
     pub fn request_redraw(&mut self) {
         self.cache.clear();
     }
-}
 
-#[derive(Debug)]
-pub struct State {
-    pub zoom_scaling: f32,
-    pub center: Point,
-    pub last_mouse_position: Point,
-    pub translation: Vector,
-    pub is_pressed: bool,
-    pub was_pressed: bool,
-}
-
-impl State {}
-impl Default for State {
-    fn default() -> Self {
-        Self {
-            zoom_scaling: 1.0,
-            center: Point::default(),
-            last_mouse_position: Point::default(),
-            translation: Vector::default(),
-            is_pressed: false,
-            was_pressed: false,
+    pub fn translate_nodes(&mut self) {
+        for node in &mut self.nodes {
+            node.translate_rendered_position(self.translation);
         }
     }
 }
 
+#[derive(Debug, Default)]
+pub struct CanvasState {
+    pub is_pressed: bool,    
+    pub was_pressed: bool,    
+}
+
 impl canvas::Program<Message> for Canvas {
-    type State = State;
+    type State = CanvasState;
 
     fn update(
         &self,
@@ -79,7 +68,7 @@ impl canvas::Program<Message> for Canvas {
         bounds: Rectangle,
         cursor: Cursor,
     ) -> (Status, Option<Message>) {
-        let Some(cursor_position) = cursor.position_in(bounds) else {
+        let Some(cursor_position) = cursor.position_over(bounds) else {
             return (Status::Ignored, None);
         };
 
@@ -87,21 +76,23 @@ impl canvas::Program<Message> for Canvas {
             Event::Mouse(mouse_event) => {
                 match mouse_event {
                     mouse::Event::ButtonPressed(mouse::Button::Left) => {
-                        state.is_pressed = true;
-                        state.last_mouse_position = cursor_position;
-                        println!("{:?}", cursor_position);
+                        state.is_pressed = true;                        
+                        (Status::Captured, Some(Message::CanvasButtonPressed(cursor_position)))
                     }
-                    mouse::Event::ButtonReleased(mouse::Button::Left) => state.is_pressed = false,
+                    mouse::Event::ButtonReleased(mouse::Button::Left) => {
+                        state.is_pressed = false;
+                        (Status::Captured, None)
+                    },                   
                     mouse::Event::CursorMoved { position } => {
-                        if state.is_pressed {
-                            let new_translation = position - state.last_mouse_position;
-                            state.translation = state.translation + new_translation.into();
-                            state.last_mouse_position = position;
+                        if state.is_pressed {                            
+                            (Status::Captured, Some(Message::CanvasTranslating(position)))
+                        } else {
+                            (Status::Captured, None)   
                         }
-                    }
-                    _ => (),
-                };
-                (Status::Captured, None)
+                        
+                    }                    
+                    _ => (Status::Captured, None),
+                }                
             }
             _ => (Status::Ignored, None),
         }
@@ -115,13 +106,12 @@ impl canvas::Program<Message> for Canvas {
         bounds: Rectangle,
         _cursor: mouse::Cursor,
     ) -> Vec<Geometry> {
-        let content = self.cache.draw(renderer, bounds.size(), |frame| {
-            let nodes = self.nodes.clone(); //TODO: try not to clone?
-            for node in nodes {
+        let content = self.cache.draw(renderer, bounds.size(), |frame| {            
+            for node in &self.nodes {
                 frame.with_save(|frame| {
-                    frame.with_clip(bounds, |frame| {
+                    //frame.with_clip(bounds, |frame| {
                         node.draw(frame, theme);
-                    });
+                    //});
                 });
             }
 

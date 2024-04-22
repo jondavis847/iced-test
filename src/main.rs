@@ -7,11 +7,11 @@ use iced::{
 use iced_aw::{card, modal};
 //use std::collections::HashMap;
 
-mod graph;
+mod canvas;
 mod multibody;
 
-pub use crate::multibody::Body;
-use graph::Graph;
+use crate::canvas::Canvas as GraphCanvas;
+use crate::multibody::Body;
 
 fn main() -> iced::Result {
     IcedTest::run(Settings::default())
@@ -39,18 +39,18 @@ enum IcedTest {
 #[derive(Debug)]
 struct State {
     add_body_name_input: String,
-    bodies: Vec<Body>, 
+    bodies: Vec<Body>,
     show_add_body_modal: bool,
-    graph: Graph,
+    canvas: GraphCanvas,
 }
 
 impl Default for State {
     fn default() -> Self {
         Self {
             add_body_name_input: String::new(),
-            bodies: Vec::<Body>::new(),            
+            bodies: Vec::<Body>::new(),
             show_add_body_modal: false,
-            graph: Graph::default(),
+            canvas: GraphCanvas::default(),
         }
     }
 }
@@ -93,20 +93,11 @@ impl Application for IcedTest {
             IcedTest::Loaded(state) => match message {
                 Message::AddBodyClicked => state.show_add_body_modal = true,
                 Message::AddBodyNameInputChanged(value) => state.add_body_name_input = value,
-                Message::CanvasButtonPressed(position) => state.graph.canvas.last_mouse_position = position,
-                Message::CanvasTranslating(position) => {
-                    let new_translation = position - state.graph.canvas.last_mouse_position;
-                    state.graph.canvas.translation = state.graph.canvas.translation + new_translation;
-                    state.graph.canvas.last_mouse_position = position;  
-                    state.graph.canvas.translate_nodes();                                                      
-                    state.graph.canvas.cache.clear();
-                }
                 Message::CloseAddBodyModal => state.show_add_body_modal = false,
                 Message::SaveBody => {
                     let body = Body::new(state.add_body_name_input.clone());
                     let body_name = body.name.clone();
                     state.bodies.push(body);
-                    state.graph.add_body(body_name);
                     state.show_add_body_modal = false;
                 }
                 _ => {}
@@ -129,22 +120,12 @@ impl Application for IcedTest {
             .into(),
             IcedTest::Loaded(state) => {
                 let graph_canvas = state
-                    .graph
                     .canvas
                     .container()
                     .width(Length::Fill)
                     .height(Length::Fill);
 
-                let button_bar = container(
-                    button("Add Body")                        
-                        .on_press(Message::AddBodyClicked),
-                )
-                .width(Length::Shrink)
-                .height(Length::Fill);
-
-                let underlay_row = Row::new().push(button_bar).push(graph_canvas);
-
-                let underlay = Container::new(underlay_row);
+                let underlay = Row::new().push(graph_canvas);
 
                 let overlay = if state.show_add_body_modal {
                     Some(

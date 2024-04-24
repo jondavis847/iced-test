@@ -10,6 +10,7 @@ use iced_aw::{card, modal};
 mod canvas;
 mod multibody;
 
+use crate::canvas::node::NodeType;
 use crate::canvas::Canvas as GraphCanvas;
 use crate::multibody::Body;
 
@@ -20,13 +21,13 @@ fn main() -> iced::Result {
 // Define the possible user interactions
 #[derive(Debug, Clone)]
 enum Message {
-    AddBodyClicked,
     AddBodyNameInputChanged(String),
     CanvasTranslating(Point),
     CanvasButtonPressed(Point),
-    CloseAddBodyModal,
+    CloseModal,
     FontLoaded(Result<(), font::Error>),
     Loaded(Result<(), String>),
+    NodeAdded(NodeType, Point),
     SaveBody,
 }
 
@@ -40,7 +41,7 @@ enum IcedTest {
 struct State {
     add_body_name_input: String,
     bodies: Vec<Body>,
-    show_add_body_modal: bool,
+    modal: Option<NodeType>,
     canvas: GraphCanvas,
 }
 
@@ -49,7 +50,7 @@ impl Default for State {
         Self {
             add_body_name_input: String::new(),
             bodies: Vec::<Body>::new(),
-            show_add_body_modal: false,
+            modal: None,
             canvas: GraphCanvas::default(),
         }
     }
@@ -91,14 +92,21 @@ impl Application for IcedTest {
                 }
             }
             IcedTest::Loaded(state) => match message {
-                Message::AddBodyClicked => state.show_add_body_modal = true,
                 Message::AddBodyNameInputChanged(value) => state.add_body_name_input = value,
-                Message::CloseAddBodyModal => state.show_add_body_modal = false,
+                Message::CloseModal => state.modal = None,
+                Message::NodeAdded(nodetype,position) => match nodetype {
+                    NodeType::Base => state.modal = Some(NodeType::Base),
+                    NodeType::Body => {
+                        state.modal = Some(NodeType::Body);
+                        state.canvas.add_node(state.add_body_name_input.clone(), position, NodeType::Body);
+                    }                            
+                    NodeType::Revolute => state.modal = Some(NodeType::Revolute),
+                },
                 Message::SaveBody => {
                     let body = Body::new(state.add_body_name_input.clone());
                     let body_name = body.name.clone();
                     state.bodies.push(body);
-                    state.show_add_body_modal = false;
+                    state.modal = None;
                 }
                 _ => {}
             },
@@ -127,37 +135,42 @@ impl Application for IcedTest {
 
                 let underlay = Row::new().push(graph_canvas);
 
-                let overlay = if state.show_add_body_modal {
-                    Some(
-                        card(
-                            "Body Information",
-                            column![text_input("name", &state.add_body_name_input)
-                                .on_input(Message::AddBodyNameInputChanged)],
-                        )
-                        .foot(
-                            Row::new()
-                                .spacing(10)
-                                .padding(5)
-                                .width(Length::Fill)
-                                .push(
-                                    button("Cancel")
-                                        .width(Length::Fill)
-                                        .on_press(Message::CloseAddBodyModal),
-                                )
-                                .push(button("Ok").width(Length::Fill).on_press(Message::SaveBody)),
-                        )
-                        .max_width(500.0)
-                        //.width(Length::Shrink)
-                        .on_close(Message::CloseAddBodyModal),
-                    )
+                let overlay = if state.modal.is_some() {
+                    match state.modal.unwrap() {
+                        NodeType::Base => None,
+                        NodeType::Body => Some(
+                            card(
+                                "Body Information",
+                                column![text_input("name", &state.add_body_name_input)
+                                    .on_input(Message::AddBodyNameInputChanged)],
+                            )                            
+                            .foot(
+                                Row::new()
+                                    .spacing(10)
+                                    .padding(5)
+                                    .width(Length::Fill)
+                                    .push(
+                                        button("Cancel")
+                                            .width(Length::Fill)
+                                            .on_press(Message::CloseModal),
+                                    )
+                                    .push(
+                                        button("Ok")
+                                            .width(Length::Fill)
+                                            .on_press(Message::SaveBody),
+                                    ),
+                            )                            
+                            .on_close(Message::CloseModal)
+                            .max_width(500.0),
+                        ),
+                        NodeType::Revolute => None,
+                    }
                 } else {
                     None
                 };
-
                 modal(underlay, overlay)
-                    .backdrop(Message::CloseAddBodyModal)
-                    .on_esc(Message::CloseAddBodyModal)
-                    .align_y(alignment::Vertical::Center)
+                    .on_esc(Message::CloseModal)
+                    .align_y(alignment::Vertical::Center)                    
                     .into()
             }
         }

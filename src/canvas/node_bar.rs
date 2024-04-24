@@ -1,4 +1,5 @@
 use iced::{
+    Color,
     mouse::Cursor,
     widget::canvas::{Frame, Path, Stroke},
     Point, Rectangle, Size, Theme,
@@ -6,7 +7,7 @@ use iced::{
 
 use crate::canvas::{CanvasState,GrabbedNode};
 use crate::canvas::node::Node;
-
+use crate::Message;
 #[derive(Debug)]
 pub struct NodeBar {        
     pub bounds: Rectangle,
@@ -40,14 +41,9 @@ impl NodeBar {
         for i in 0..state.nodebar_nodes.len() {        
             state.nodebar_nodes[i].is_clicked(cursor);
             if state.nodebar_nodes[i].is_clicked {
-                state.grabbed_node = Some(GrabbedNode::new(true,i));                
+                state.grabbed_node = Some(GrabbedNode::new(true,i,state.nodebar_nodes[i].nodetype));                
             }
         }
     }
 }
 
-enum NodebarNode {
-    Base,
-    Body,
-    Revolute,
-}

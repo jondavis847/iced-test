@@ -15,7 +15,7 @@ pub mod node;
 pub mod node_bar;
 
 use crate::canvas::graph::Graph;
-use crate::canvas::node::Node;
+use crate::canvas::node::{Node,NodeType};
 use crate::canvas::node_bar::NodeBar;
 use crate::Message;
 
@@ -39,8 +39,8 @@ impl Canvas {
         )
     }
 
-    pub fn add_node(&mut self, label: String, rendered_position: Point) {
-        let node = Node::new(label, rendered_position, self.zoom_scaling);
+    pub fn add_node(&mut self, label: String, rendered_position: Point, nodetype: NodeType) {
+        let node = Node::new(label, rendered_position, self.zoom_scaling, nodetype);
         self.request_redraw();
     }
 
@@ -71,8 +71,9 @@ impl CanvasState {
 impl Default for CanvasState {
     fn default() ->Self {
         let mut nodes = Vec::<Node>::new();
-        nodes.push(Node::new("Body".into(), Point::new(0.0, 0.0), 1.0));
-        nodes.push(Node::new("Joint".into(), Point::new(0.0, 50.0), 1.0));
+        nodes.push(Node::new("Base".into(), Point::new(0.0, 0.0), 1.0, NodeType::Base));
+        nodes.push(Node::new("Body".into(), Point::new(0.0, 50.0), 1.0, NodeType::Body));
+        nodes.push(Node::new("Revolute".into(), Point::new(0.0, 100.0), 1.0, NodeType::Revolute));
         Self {            
             is_pressed: false,
             was_pressed: false,
@@ -87,13 +88,13 @@ impl Default for CanvasState {
 
 #[derive(Debug)]
 struct GrabbedNode {
-    pub is_nodebar: bool,
+    pub is_nodebar: bool,    
     pub index: usize,
+    pub nodetype: NodeType,
 }
-
 impl GrabbedNode {
-    pub fn new(is_nodebar: bool, index: usize) -> Self {
-        Self{is_nodebar, index}
+    fn new(is_nodebar: bool, index: usize, nodetype: NodeType) -> Self {
+        Self{is_nodebar,index,nodetype}
     }
 }
 
@@ -130,19 +131,20 @@ impl canvas::Program<Message> for Canvas {
                     )
                 }
                 mouse::Event::ButtonReleased(mouse::Button::Left) => {
+                    let mut message = None;
                     state.is_pressed = false;
                     if let Some(node) = &state.grabbed_node {                        
                         if node.is_nodebar {
-                            //
-
+                            // Add a node
+                            message = Some(Message::NodeAdded(node.nodetype,cursor_position));
                             // return nodebar node back to nodebar
                             state.nodebar_nodes[node.index].bounds.x = 0.0;
                             state.nodebar_nodes[node.index].bounds.y = 50.0 * node.index as f32;
-                            self.cache.clear();
+                            self.cache.clear();                            
                         }
                     }
                     state.grabbed_node = None;
-                    (Status::Captured, None)
+                    (Status::Captured, message)
                 }
                 mouse::Event::CursorMoved { position } => {
                     if state.is_pressed {

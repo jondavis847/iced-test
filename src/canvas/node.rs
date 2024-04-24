@@ -1,4 +1,5 @@
 use crate::font::Font;
+use crate::Message;
 use iced::{
     alignment::{Horizontal, Vertical},
     mouse::Cursor,
@@ -6,16 +7,24 @@ use iced::{
     Color, Point, Rectangle, Size, Theme, Vector,
 };
 
+#[derive(Debug, Clone, Copy)]
+pub enum NodeType {
+    Base,
+    Body,
+    Revolute,
+}
+
 #[derive(Debug, Clone)]
 pub struct Node {
     label: String,
     pub bounds: Rectangle,
     pub is_clicked: bool,
     pub is_nodebar: bool,
+    pub nodetype: NodeType,
 }
 
 impl Node {
-    pub fn new(label: String, position: Point, scale: f32) -> Self {
+    pub fn new(label: String, position: Point, scale: f32, nodetype: NodeType) -> Self {
         let height = scale * 50.0;
         let width = scale * 100.0;
         let top_left = Point::new(position.x, position.y);
@@ -25,6 +34,7 @@ impl Node {
             bounds: Rectangle::new(top_left, size),
             is_clicked: false,
             is_nodebar: false,
+            nodetype: nodetype
         }
     }
 

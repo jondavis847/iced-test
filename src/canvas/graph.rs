@@ -15,7 +15,7 @@ impl Graph {
         for i in 0..state.graph_nodes.len()-1 {        
             state.graph_nodes[i].is_clicked(cursor);
             if state.graph_nodes[i].is_clicked {
-                state.grabbed_node = Some(GrabbedNode::new(false,i));
+                state.grabbed_node = Some(GrabbedNode::new(false,i,state.graph_nodes[i].nodetype));
             }
         }
         //logic for multiple nodes clicked

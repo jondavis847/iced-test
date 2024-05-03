@@ -1,6 +1,11 @@
 use iced::{
     alignment, font,
-    widget::{button, column, container, text, text_input, Container, Row},
+    mouse::Cursor,
+    widget::{
+        button,
+        canvas::{Cache, Canvas},
+        column, container, text, text_input, Row,
+    },
     Application, Command, Element, Length, Point, Settings, Theme,
 };
 
@@ -10,8 +15,10 @@ use iced_aw::{card, modal};
 mod canvas;
 mod multibody;
 
-use crate::canvas::node::NodeType;
-use crate::canvas::Canvas as GraphCanvas;
+use crate::canvas::graph::Graph;
+use crate::canvas::node::{ClickedNode, Node};
+use crate::canvas::node_bar::NodeBar;
+use crate::canvas::GraphCanvas;
 use crate::multibody::Body;
 
 fn main() -> iced::Result {
@@ -23,36 +30,122 @@ fn main() -> iced::Result {
 enum Message {
     AddBodyNameInputChanged(String),
     CanvasTranslating(Point),
-    CanvasButtonPressed(Point),
+    LeftButtonPressed(Cursor),
+    LeftButtonReleased(Cursor),
+    CursorMoved(Cursor),
     CloseModal,
     FontLoaded(Result<(), font::Error>),
     Loaded(Result<(), String>),
-    NodeAdded(NodeType, Point),
     SaveBody,
+}
+
+#[derive(Debug, Clone, Copy)]
+enum NodeType {
+    Base,
+    Body,
+    Revolute,
 }
 
 #[derive(Debug)]
 enum IcedTest {
     Loading,
-    Loaded(State),
+    Loaded(AppState),
 }
 
 #[derive(Debug)]
-struct State {
+struct AppState {
     add_body_name_input: String,
+    cache: Cache,
+    clicked_node: Option<ClickedNode>,
     bodies: Vec<Body>,
+    last_mouse_position: Point,
     modal: Option<NodeType>,
-    canvas: GraphCanvas,
+    graph: Graph,
+    is_pressed: bool,
+    node_bar: NodeBar,
 }
 
-impl Default for State {
+impl Default for AppState {
     fn default() -> Self {
+        let bodies = Vec::<Body>::new();
         Self {
             add_body_name_input: String::new(),
-            bodies: Vec::<Body>::new(),
+            bodies: bodies,
+            cache: Cache::new(),
+            clicked_node: None,
+            graph: Graph::default(),
+            last_mouse_position: Point::default(),
             modal: None,
-            canvas: GraphCanvas::default(),
+            is_pressed: false,
+            node_bar: NodeBar::default(),
         }
+    }
+}
+
+impl AppState {
+    pub fn cursor_moved(&mut self, cursor: Cursor) {
+        self.last_mouse_position = cursor.position().unwrap();
+        self.translate_nodes(cursor);
+    }
+    pub fn translate_nodes(&mut self, cursor: Cursor) {
+        if let Some(cursor_position) = cursor.position() {
+            self.node_bar
+                .nodes
+                .iter_mut()
+                .for_each(|node| node.translate_node(cursor_position));
+            if let Some(cursor_graph_position) = cursor.position_in(self.graph.bounds) {
+                self.bodies
+                    .iter_mut()
+                    .for_each(|body| body.translate_node(cursor_graph_position));
+            }
+            self.cache.clear();
+        }
+    }
+
+    pub fn left_button_pressed(&mut self, cursor: Cursor) {
+        // determine if it's pressed on the node bar or canvas
+        let clicked_node = &mut self.clicked_node;
+        if cursor.is_over(self.node_bar.bounds) {
+            self.node_bar.get_clicked_nodes(cursor, clicked_node);
+        };
+        if let Some(cursor_position) = cursor.position_in(self.graph.bounds) {
+            self.last_mouse_position = cursor_position;
+            for body in &mut self.bodies {
+                let node = &mut body.node;
+                node.is_clicked(cursor_position);
+                println!("{:?}", node);
+                if node.is_clicked {
+                    *clicked_node = Some(ClickedNode::new(node.modal, false));
+                }
+            }
+        }
+    }
+
+    pub fn left_button_released(&mut self, cursor: Cursor) {
+        if let Some(cursor_position) = cursor.position_in(self.graph.bounds) {
+            self.last_mouse_position = cursor_position;
+        }
+        if let Some(clicked_node) = &self.clicked_node {
+            if clicked_node.is_nodebar {
+                if cursor.is_over(self.graph.bounds) {
+                    self.modal = Some(clicked_node.node_type);
+                }
+            }
+            // reset
+            self.node_bar.nodes.iter_mut().for_each(|node| node.drop());
+            self.bodies.iter_mut().for_each(|body| body.drop());
+            self.clicked_node = None;
+            self.cache.clear();
+        }
+    }
+
+    pub fn save_body(&mut self) {
+        let body_name = self.add_body_name_input.clone();
+        let node = Node::new(self.last_mouse_position, self.graph.zoom, NodeType::Body);
+        let body = Body::new(body_name, node);
+        self.bodies.push(body);
+        self.modal = None;
+        self.cache.clear();
     }
 }
 
@@ -88,26 +181,16 @@ impl Application for IcedTest {
         match self {
             IcedTest::Loading => {
                 if let Message::Loaded(_) = message {
-                    *self = IcedTest::Loaded(State::default())
+                    *self = IcedTest::Loaded(AppState::default())
                 }
             }
             IcedTest::Loaded(state) => match message {
                 Message::AddBodyNameInputChanged(value) => state.add_body_name_input = value,
+                Message::LeftButtonPressed(cursor) => state.left_button_pressed(cursor),
+                Message::LeftButtonReleased(cursor) => state.left_button_released(cursor),
                 Message::CloseModal => state.modal = None,
-                Message::NodeAdded(nodetype,position) => match nodetype {
-                    NodeType::Base => state.modal = Some(NodeType::Base),
-                    NodeType::Body => {
-                        state.modal = Some(NodeType::Body);
-                        state.canvas.add_node(state.add_body_name_input.clone(), position, NodeType::Body);
-                    }                            
-                    NodeType::Revolute => state.modal = Some(NodeType::Revolute),
-                },
-                Message::SaveBody => {
-                    let body = Body::new(state.add_body_name_input.clone());
-                    let body_name = body.name.clone();
-                    state.bodies.push(body);
-                    state.modal = None;
-                }
+                Message::CursorMoved(cursor) => state.cursor_moved(cursor),
+                Message::SaveBody => state.save_body(),
                 _ => {}
             },
         }
@@ -127,13 +210,16 @@ impl Application for IcedTest {
             .center_x()
             .into(),
             IcedTest::Loaded(state) => {
-                let graph_canvas = state
-                    .canvas
-                    .container()
-                    .width(Length::Fill)
-                    .height(Length::Fill);
+                let graph_canvas = GraphCanvas::new(state);
+                let graph_container = container(
+                    Canvas::new(graph_canvas)
+                        .width(Length::Fill)
+                        .height(Length::Fill),
+                )
+                .width(Length::Fill)
+                .height(Length::Fill);
 
-                let underlay = Row::new().push(graph_canvas);
+                let underlay = Row::new().push(graph_container);
 
                 let overlay = if state.modal.is_some() {
                     match state.modal.unwrap() {
@@ -143,7 +229,7 @@ impl Application for IcedTest {
                                 "Body Information",
                                 column![text_input("name", &state.add_body_name_input)
                                     .on_input(Message::AddBodyNameInputChanged)],
-                            )                            
+                            )
                             .foot(
                                 Row::new()
                                     .spacing(10)
@@ -159,7 +245,7 @@ impl Application for IcedTest {
                                             .width(Length::Fill)
                                             .on_press(Message::SaveBody),
                                     ),
-                            )                            
+                            )
                             .on_close(Message::CloseModal)
                             .max_width(500.0),
                         ),
@@ -170,7 +256,7 @@ impl Application for IcedTest {
                 };
                 modal(underlay, overlay)
                     .on_esc(Message::CloseModal)
-                    .align_y(alignment::Vertical::Center)                    
+                    .align_y(alignment::Vertical::Center)
                     .into()
             }
         }

@@ -1,5 +1,6 @@
 use crate::font::Font;
-use crate::Message;
+
+use crate::NodeType;
 use iced::{
     alignment::{Horizontal, Vertical},
     mouse::Cursor,
@@ -7,38 +8,29 @@ use iced::{
     Color, Point, Rectangle, Size, Theme, Vector,
 };
 
-#[derive(Debug, Clone, Copy)]
-pub enum NodeType {
-    Base,
-    Body,
-    Revolute,
-}
-
 #[derive(Debug, Clone)]
 pub struct Node {
-    label: String,
     pub bounds: Rectangle,
     pub is_clicked: bool,
     pub is_nodebar: bool,
-    pub nodetype: NodeType,
+    pub modal: NodeType,
 }
 
 impl Node {
-    pub fn new(label: String, position: Point, scale: f32, nodetype: NodeType) -> Self {
+    pub fn new(position: Point, scale: f32, modal: NodeType) -> Self {
         let height = scale * 50.0;
         let width = scale * 100.0;
-        let top_left = Point::new(position.x, position.y);
+        let top_left = Point::new(position.x-width/2.0, position.y-height/2.0);
         let size = Size::new(width, height);
         Self {
-            label: label,
             bounds: Rectangle::new(top_left, size),
             is_clicked: false,
             is_nodebar: false,
-            nodetype: nodetype
+            modal: modal,
         }
     }
 
-    pub fn draw(&self, frame: &mut Frame, theme: &Theme) {
+    pub fn draw(&self, frame: &mut Frame, theme: &Theme, label: &str) {
         let palette = theme.extended_palette();
         let background = Path::rectangle(self.bounds.position(), self.bounds.size());
         frame.with_save(|frame| {
@@ -52,7 +44,7 @@ impl Node {
             );
             frame.fill(&background, palette.primary.strong.color);
             frame.fill_text(Text {
-                content: self.label.clone(),
+                content: label.into(),
                 color: palette.primary.strong.text,
                 font: Font::MONOSPACE,
                 horizontal_alignment: Horizontal::Center,
@@ -69,15 +61,33 @@ impl Node {
     }
 
     pub fn translate_to(&mut self, position: Point) {
-        self.bounds.x = position.x - self.bounds.width / 2.0;
-        self.bounds.y = position.y - self.bounds.height / 2.0;
+        if self.is_clicked {
+            self.bounds.x = position.x - self.bounds.width / 2.0;
+            self.bounds.y = position.y - self.bounds.height / 2.0;
+        }
     }
 
-    pub fn is_clicked(&mut self, cursor: Cursor) {
-        if cursor.position_over(self.bounds).is_some() {
-            self.is_clicked = true;
+    pub fn is_clicked(&mut self, cursor_position: Point) {       
+        println!("{:?}.{:?}", cursor_position,self.bounds) ;
+        if self.bounds.contains(cursor_position) {
+            self.is_clicked = true;            
         } else {
             self.is_clicked = false;
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct ClickedNode {
+    pub node_type: NodeType,
+    pub is_nodebar: bool,
+}
+
+impl ClickedNode {
+    pub fn new(node_type: NodeType, is_nodebar: bool) -> Self {
+        Self {
+            node_type,
+            is_nodebar,
         }
     }
 }

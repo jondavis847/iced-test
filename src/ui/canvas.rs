@@ -54,11 +54,10 @@ impl<'a> canvas::Program<Message> for GraphCanvas<'a> {
                 mouse::Event::ButtonPressed(mouse::Button::Left) => {
                     (Status::Captured, Some(Message::LeftButtonPressed(cursor)))
                 }
-                mouse::Event::ButtonReleased(mouse::Button::Left) => (
-                    Status::Captured,
-                    Some(Message::LeftButtonReleased(cursor)),
-                ),
-                mouse::Event::CursorMoved { position } => {
+                mouse::Event::ButtonReleased(mouse::Button::Left) => {
+                    (Status::Captured, Some(Message::LeftButtonReleased(cursor)))
+                }
+                mouse::Event::CursorMoved { position: _ } => {
                     (Status::Captured, Some(Message::CursorMoved(cursor)))
                 }
                 _ => (Status::Captured, None),
@@ -76,12 +75,20 @@ impl<'a> canvas::Program<Message> for GraphCanvas<'a> {
         _cursor: mouse::Cursor,
     ) -> Vec<Geometry> {
         let all_content = self.app_state.cache.draw(renderer, bounds.size(), |frame| {
-            self.app_state.node_bar.draw(frame, theme);
+            // create nodes that are not clipped first (nodebar)
+            self.app_state.nodes.iter().for_each(|(_, node)| {
+                if node.is_nodebar {
+                    node.draw(frame, theme)
+                }
+            });
+
+            // create nodes that clipped (graph)
             frame.with_clip(self.app_state.graph.bounds, |frame| {
-                self.app_state
-                    .bodies
-                    .iter()
-                    .for_each(|body| body.draw(frame, theme));
+                self.app_state.nodes.iter().for_each(|(_, node)| {
+                    if !node.is_nodebar {
+                        node.draw(frame, theme)
+                    }
+                });
             });
 
             // canvas border

@@ -7,6 +7,7 @@ edition = "2021"
 
 [dependencies]
 iced_aw = { version = "0.8.0", features = ["modal", "card", "floating_element"] }
+uuid = { version = "1.8.0", features = ["v4"] }
 
 [dependencies.iced]
 version = "0.12.1"

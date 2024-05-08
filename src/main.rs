@@ -4,22 +4,24 @@ use iced::{
     widget::{
         button,
         canvas::{Cache, Canvas},
-        column, container, text, text_input, Row,
+        container, text, text_input, Column, Row,
     },
-    Application, Command, Element, Length, Point, Settings, Theme,
+    Application, Command, Element, Length, Point, Rectangle, Settings, Size,
 };
+use std::collections::HashMap;
+use uuid::Uuid;
 
 use iced_aw::{card, modal};
-//use std::collections::HashMap;
 
-mod canvas;
 mod multibody;
+mod ui;
 
-use crate::canvas::graph::Graph;
-use crate::canvas::node::{ClickedNode, Node};
-use crate::canvas::node_bar::NodeBar;
-use crate::canvas::GraphCanvas;
 use crate::multibody::Body;
+use crate::ui::canvas::graph::Graph;
+use crate::ui::canvas::node::Node;
+use crate::ui::canvas::node_bar::{NodeBar, NodeBarMap};
+use crate::ui::canvas::GraphCanvas;
+use crate::ui::modals::{BodyModal, Modals};
 
 fn main() -> iced::Result {
     IcedTest::run(Settings::default())
@@ -29,21 +31,13 @@ fn main() -> iced::Result {
 #[derive(Debug, Clone)]
 enum Message {
     AddBodyNameInputChanged(String),
-    CanvasTranslating(Point),
     LeftButtonPressed(Cursor),
     LeftButtonReleased(Cursor),
     CursorMoved(Cursor),
     CloseModal,
     FontLoaded(Result<(), font::Error>),
     Loaded(Result<(), String>),
-    SaveBody,
-}
-
-#[derive(Debug, Clone, Copy)]
-enum NodeType {
-    Base,
-    Body,
-    Revolute,
+    SaveBody(BodyModal),
 }
 
 #[derive(Debug)]
@@ -54,99 +48,194 @@ enum IcedTest {
 
 #[derive(Debug)]
 struct AppState {
-    add_body_name_input: String,
-    cache: Cache,
-    clicked_node: Option<ClickedNode>,
     bodies: Vec<Body>,
-    last_mouse_position: Point,
-    modal: Option<NodeType>,
+    cache: Cache,
+    clicked_node: Option<Uuid>,
     graph: Graph,
     is_pressed: bool,
-    node_bar: NodeBar,
+    last_graph_cursor_position: Point,
+    modal: Option<Uuid>, //uuid of node, modal is owned by node
+    nodebar: NodeBar,
+    nodes: HashMap<Uuid, Node>,
 }
 
 impl Default for AppState {
     fn default() -> Self {
-        let bodies = Vec::<Body>::new();
+        let nodebar = NodeBar::default();
+        let default_nodes = default_nodes(nodebar.clone().map);
         Self {
-            add_body_name_input: String::new(),
-            bodies: bodies,
+            bodies: Vec::new(),
             cache: Cache::new(),
             clicked_node: None,
             graph: Graph::default(),
-            last_mouse_position: Point::default(),
-            modal: None,
             is_pressed: false,
-            node_bar: NodeBar::default(),
+            last_graph_cursor_position: Point::default(),
+            modal: None,
+            nodebar: nodebar,
+            nodes: default_nodes,
         }
     }
 }
 
 impl AppState {
-    pub fn cursor_moved(&mut self, cursor: Cursor) {
-        self.last_mouse_position = cursor.position().unwrap();
-        self.translate_nodes(cursor);
-    }
-    pub fn translate_nodes(&mut self, cursor: Cursor) {
-        if let Some(cursor_position) = cursor.position() {
-            self.node_bar
-                .nodes
-                .iter_mut()
-                .for_each(|node| node.translate_node(cursor_position));
-            if let Some(cursor_graph_position) = cursor.position_in(self.graph.bounds) {
-                self.bodies
-                    .iter_mut()
-                    .for_each(|body| body.translate_node(cursor_graph_position));
+    pub fn get_clicked_node(&mut self, cursor: Cursor) {
+        self.clicked_node = None;
+        self.nodes.iter_mut().for_each(|(key, node)| {
+            if node.is_nodebar {
+                // use canvas position
+                if let Some(cursor_position) = cursor.position() {
+                    node.is_clicked(cursor_position);
+                    if node.is_clicked {
+                        self.clicked_node = Some(key.clone());
+                    }
+                }
+            } else {
+                // use graph position
+                if let Some(cursor_position) = cursor.position_in(self.graph.bounds) {
+                    node.is_clicked(cursor_position);
+                    if node.is_clicked {
+                        self.clicked_node = Some(key.clone());
+                    }
+                }
             }
-            self.cache.clear();
+        });
+    }
+
+    pub fn cursor_moved(&mut self, cursor: Cursor) {
+        if let Some(clicked_node_id) = self.clicked_node {
+            // a node is clicked and being dragged
+            if let Some(clicked_node) = self.nodes.get_mut(&clicked_node_id) {
+                if clicked_node.is_nodebar {
+                    if let Some(cursor_position) = cursor.position() {
+                        clicked_node.translate_to(cursor_position);
+                        self.cache.clear();
+                    }
+                } else {
+                    if let Some(cursor_position) = cursor.position_in(self.graph.bounds) {
+                        clicked_node.translate_to(cursor_position);
+                        self.cache.clear();
+                        self.last_graph_cursor_position = cursor_position;
+                    }
+                }
+            }
+        } else {
+            // no node is clicked, graph is translating if the cursor is clicked on the graph
+            if self.is_pressed {
+                if let Some(graph_cursor_position) = cursor.position_in(self.graph.bounds) {
+                    let delta = graph_cursor_position - self.last_graph_cursor_position;
+                    self.nodes.iter_mut().for_each(|(_, node)| {
+                        if !node.is_nodebar {
+                            node.translate_by(delta);
+                        }
+                    });
+                    self.last_graph_cursor_position = graph_cursor_position;
+                    self.cache.clear();
+                }
+            }
         }
     }
 
     pub fn left_button_pressed(&mut self, cursor: Cursor) {
-        // determine if it's pressed on the node bar or canvas
-        let clicked_node = &mut self.clicked_node;
-        if cursor.is_over(self.node_bar.bounds) {
-            self.node_bar.get_clicked_nodes(cursor, clicked_node);
-        };
-        if let Some(cursor_position) = cursor.position_in(self.graph.bounds) {
-            self.last_mouse_position = cursor_position;
-            for body in &mut self.bodies {
-                let node = &mut body.node;
-                node.is_clicked(cursor_position);
-                println!("{:?}", node);
-                if node.is_clicked {
-                    *clicked_node = Some(ClickedNode::new(node.modal, false));
-                }
-            }
+        self.is_pressed = true;
+        self.get_clicked_node(cursor);
+        if let Some(graph_cursor_position) = cursor.position_in(self.graph.bounds) {
+            self.last_graph_cursor_position = graph_cursor_position;
         }
     }
 
     pub fn left_button_released(&mut self, cursor: Cursor) {
-        if let Some(cursor_position) = cursor.position_in(self.graph.bounds) {
-            self.last_mouse_position = cursor_position;
-        }
-        if let Some(clicked_node) = &self.clicked_node {
-            if clicked_node.is_nodebar {
-                if cursor.is_over(self.graph.bounds) {
-                    self.modal = Some(clicked_node.node_type);
+        self.is_pressed = false;
+        if let Some(clicked_node_id) = self.clicked_node {
+            if let Some(clicked_node) = self.nodes.get_mut(&clicked_node_id) {
+                if clicked_node.is_nodebar {
+                    if let Some(cursor_position) = cursor.position_in(self.graph.bounds) {
+                        self.last_graph_cursor_position = cursor_position;
+                    }
+                    self.modal = Some(clicked_node_id);
                 }
+                clicked_node.drop();
             }
-            // reset
-            self.node_bar.nodes.iter_mut().for_each(|node| node.drop());
-            self.bodies.iter_mut().for_each(|body| body.drop());
-            self.clicked_node = None;
-            self.cache.clear();
         }
+        // reset
+        self.clicked_node = None;
+        self.cache.clear();
     }
 
-    pub fn save_body(&mut self) {
-        let body_name = self.add_body_name_input.clone();
-        let node = Node::new(self.last_mouse_position, self.graph.zoom, NodeType::Body);
-        let body = Body::new(body_name, node);
+    pub fn save_body(&mut self, modal: BodyModal) {
+        let name = modal.name.clone();
+        let body_modal = Modals::Body(modal);
+
+        let size = Size::new(100.0, 50.0); //TODO: make width dynamic based on name length
+        let top_left = Point::new(
+            self.last_graph_cursor_position.x - size.width / 2.0,
+            self.last_graph_cursor_position.y - size.height / 2.0,
+        );
+        let bounds = Rectangle::new(top_left, size);
+
+        let node_id = Uuid::new_v4();
+        let node = Node::new(bounds, None, false, name.clone(), body_modal);
+
+        let body = Body::new(name, node_id.clone());
+
         self.bodies.push(body);
+        self.nodes.insert(node_id.clone(), node);
         self.modal = None;
         self.cache.clear();
     }
+}
+
+fn create_default_node(
+    nodes: &mut HashMap<Uuid, Node>,
+    node_id: Uuid,
+    label: &str,
+    node_size: Size,
+    home: Point,
+    modal: Modals,
+) {
+    nodes.insert(
+        node_id.clone(),
+        Node::new(
+            Rectangle::new(home.clone(), node_size),
+            Some(home.clone()),
+            true,
+            label.to_string(),
+            modal,
+        ),
+    );
+}
+fn default_nodes(node_map: NodeBarMap) -> HashMap<Uuid, Node> {
+    let mut nodes = HashMap::<Uuid, Node>::new();
+    let node_size = Size::new(100.0, 50.0);
+
+    //add base node
+    create_default_node(
+        &mut nodes,
+        node_map.base,
+        "+base",
+        node_size,
+        Point::new(0.0, 0.0),
+        Modals::Base,
+    );
+
+    create_default_node(
+        &mut nodes,
+        node_map.body,
+        "+body",
+        node_size,
+        Point::new(0.0, 50.0),
+        Modals::Body(BodyModal::new(String::new())),
+    );
+
+    create_default_node(
+        &mut nodes,
+        node_map.revolute,
+        "+revolute",
+        node_size,
+        Point::new(0.0, 100.0),
+        Modals::Revolute,
+    );
+
+    nodes
 }
 
 async fn load() -> Result<(), String> {
@@ -155,14 +244,14 @@ async fn load() -> Result<(), String> {
 
 impl Application for IcedTest {
     type Message = Message;
-    type Theme = Theme;
+    type Theme = iced::Theme;
     type Executor = iced::executor::Default;
     type Flags = ();
 
-    fn new(_flags: ()) -> (Self, Command<Message>) {
+    fn new(_flags: ()) -> (Self, Command<Self::Message>) {
         (
             Self::Loading,
-            Command::batch(vec![
+            Command::<Message>::batch(vec![
                 font::load(iced_aw::BOOTSTRAP_FONT_BYTES).map(Message::FontLoaded),
                 Command::perform(load(), Message::Loaded),
             ]),
@@ -185,12 +274,19 @@ impl Application for IcedTest {
                 }
             }
             IcedTest::Loaded(state) => match message {
-                Message::AddBodyNameInputChanged(value) => state.add_body_name_input = value,
+                Message::AddBodyNameInputChanged(value) => {
+                    let add_body_node = state.nodes.get_mut(&state.nodebar.map.body);
+                    if let Some(add_body_node) = add_body_node {
+                        if let Modals::Body(ref mut body_modal) = &mut add_body_node.modal {
+                            body_modal.name = value.clone();
+                        }
+                    }
+                }
                 Message::LeftButtonPressed(cursor) => state.left_button_pressed(cursor),
                 Message::LeftButtonReleased(cursor) => state.left_button_released(cursor),
                 Message::CloseModal => state.modal = None,
                 Message::CursorMoved(cursor) => state.cursor_moved(cursor),
-                Message::SaveBody => state.save_body(),
+                Message::SaveBody(modal) => state.save_body(modal),
                 _ => {}
             },
         }
@@ -221,39 +317,45 @@ impl Application for IcedTest {
 
                 let underlay = Row::new().push(graph_container);
 
-                let overlay = if state.modal.is_some() {
-                    match state.modal.unwrap() {
-                        NodeType::Base => None,
-                        NodeType::Body => Some(
-                            card(
-                                "Body Information",
-                                column![text_input("name", &state.add_body_name_input)
-                                    .on_input(Message::AddBodyNameInputChanged)],
-                            )
-                            .foot(
-                                Row::new()
-                                    .spacing(10)
-                                    .padding(5)
-                                    .width(Length::Fill)
-                                    .push(
-                                        button("Cancel")
-                                            .width(Length::Fill)
-                                            .on_press(Message::CloseModal),
+                let overlay = match state.modal {
+                    Some(active_modal_id) => {
+                        state
+                            .nodes
+                            .get(&active_modal_id)
+                            .and_then(|active_node| match &active_node.modal {
+                                Modals::Body(body) => {
+                                    let body_clone = body.clone();
+                                    let content = Column::new().push(
+                                        text_input("name", &body_clone.name).on_input(|string| {
+                                            crate::Message::AddBodyNameInputChanged(string)
+                                        }),
+                                    );
+
+                                    let footer = Row::new()
+                                        .spacing(10)
+                                        .padding(5)
+                                        .width(Length::Fill)
+                                        .push(
+                                            button("Cancel")
+                                                .width(Length::Fill)
+                                                .on_press(crate::Message::CloseModal),
+                                        )
+                                        .push(button("Ok").width(Length::Fill).on_press(
+                                            crate::Message::SaveBody(body_clone.clone()),
+                                        ));
+
+                                    Some(
+                                        card("Body Information", content)
+                                            .foot(footer)
+                                            .max_width(500.0),
                                     )
-                                    .push(
-                                        button("Ok")
-                                            .width(Length::Fill)
-                                            .on_press(Message::SaveBody),
-                                    ),
-                            )
-                            .on_close(Message::CloseModal)
-                            .max_width(500.0),
-                        ),
-                        NodeType::Revolute => None,
+                                }
+                                _ => None,
+                            })
                     }
-                } else {
-                    None
+                    _ => None,
                 };
+
                 modal(underlay, overlay)
                     .on_esc(Message::CloseModal)
                     .align_y(alignment::Vertical::Center)

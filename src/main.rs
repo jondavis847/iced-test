@@ -1,10 +1,10 @@
+#![windows_subsystem = "windows"]
+
 use iced::{
     alignment, font,
     mouse::Cursor,
     widget::{
-        button,
-        canvas::{Cache, Canvas},
-        container, text, text_input, Column, Row,
+        button, canvas::{Cache, Canvas}, container, shader::wgpu::core::instance::GetSurfaceSupportError, text, text_input, Column, Row
     },
     Application, Command, Element, Length, Point, Rectangle, Settings, Size,
 };
@@ -16,15 +16,18 @@ use iced_aw::{card, modal};
 mod multibody;
 mod ui;
 
-use crate::multibody::Body;
+use crate::multibody::{Base, Body};
+use crate::ui::canvas::edge::{Edge, EdgeConnection};
 use crate::ui::canvas::graph::Graph;
 use crate::ui::canvas::node::Node;
 use crate::ui::canvas::node_bar::{NodeBar, NodeBarMap};
 use crate::ui::canvas::GraphCanvas;
-use crate::ui::modals::{BodyModal, Modals};
+use crate::ui::modals::{BodyModal, Modals, RevoluteModal};
 
 fn main() -> iced::Result {
-    IcedTest::run(Settings::default())
+    let mut settings = Settings::default();
+    settings.antialiasing = true;
+    IcedTest::run(settings)
 }
 
 // Define the possible user interactions
@@ -33,10 +36,13 @@ enum Message {
     AddBodyNameInputChanged(String),
     LeftButtonPressed(Cursor),
     LeftButtonReleased(Cursor),
+    RightButtonPressed(Cursor),
+    RightButtonReleased(Cursor),
     CursorMoved(Cursor),
     CloseModal,
     FontLoaded(Result<(), font::Error>),
     Loaded(Result<(), String>),
+    SaveBase,
     SaveBody(BodyModal),
 }
 
@@ -48,15 +54,22 @@ enum IcedTest {
 
 #[derive(Debug)]
 struct AppState {
-    bodies: Vec<Body>,
+    base: Option<Base>,
+    bodies: HashMap<Uuid, Body>,
     cache: Cache,
-    clicked_node: Option<Uuid>,
+    //connections: HashMap<Uuid,Connection>,
+    left_clicked_node: Option<Uuid>,
+    right_clicked_node: Option<Uuid>,
+    middle_clicked_node: Option<Uuid>,
+    current_edge: Option<Uuid>,
+    edges: HashMap<Uuid, Edge>,
     graph: Graph,
     is_pressed: bool,
     last_graph_cursor_position: Point,
     modal: Option<Uuid>, //uuid of node, modal is owned by node
     nodebar: NodeBar,
     nodes: HashMap<Uuid, Node>,
+    theme: crate::ui::canvas::themes::Theme,
 }
 
 impl Default for AppState {
@@ -64,37 +77,83 @@ impl Default for AppState {
         let nodebar = NodeBar::default();
         let default_nodes = default_nodes(nodebar.clone().map);
         Self {
-            bodies: Vec::new(),
+            base: None,
+            bodies: HashMap::new(),
             cache: Cache::new(),
-            clicked_node: None,
+            left_clicked_node: None,
+            right_clicked_node: None,
+            middle_clicked_node: None,
+            current_edge: None,
+            edges: HashMap::new(),
             graph: Graph::default(),
             is_pressed: false,
             last_graph_cursor_position: Point::default(),
             modal: None,
             nodebar: nodebar,
             nodes: default_nodes,
+            theme: crate::ui::canvas::themes::Themes::dracula(),
+            //theme: crate::ui::canvas::themes::Themes::cyberpunk(),
         }
     }
 }
 
+enum MouseButton {
+    Left,
+    Right,
+    Middle,
+}
+
 impl AppState {
-    pub fn get_clicked_node(&mut self, cursor: Cursor) {
-        self.clicked_node = None;
+    pub fn get_clicked_node(&mut self, cursor: Cursor, mouse_button: &MouseButton) {
+        match mouse_button {
+            MouseButton::Left => self.left_clicked_node = None,
+            MouseButton::Right => self.right_clicked_node = None,
+            MouseButton::Middle => self.middle_clicked_node = None,
+        }
+
         self.nodes.iter_mut().for_each(|(key, node)| {
             if node.is_nodebar {
                 // use canvas position
                 if let Some(cursor_position) = cursor.position() {
-                    node.is_clicked(cursor_position);
-                    if node.is_clicked {
-                        self.clicked_node = Some(key.clone());
+                    node.is_clicked(cursor_position, mouse_button);
+                    match mouse_button {
+                        MouseButton::Left => {
+                            if node.is_left_clicked {
+                                self.left_clicked_node = Some(key.clone());
+                            }
+                        }
+                        MouseButton::Right => {
+                            if node.is_right_clicked {
+                                self.right_clicked_node = Some(key.clone());
+                            }
+                        }
+                        MouseButton::Middle => {
+                            if node.is_middle_clicked {
+                                self.middle_clicked_node = Some(key.clone());
+                            }
+                        }
                     }
                 }
             } else {
                 // use graph position
                 if let Some(cursor_position) = cursor.position_in(self.graph.bounds) {
-                    node.is_clicked(cursor_position);
-                    if node.is_clicked {
-                        self.clicked_node = Some(key.clone());
+                    node.is_clicked(cursor_position, mouse_button);
+                    match mouse_button {
+                        MouseButton::Left => {
+                            if node.is_left_clicked {
+                                self.left_clicked_node = Some(key.clone());
+                            }
+                        }
+                        MouseButton::Right => {
+                            if node.is_right_clicked {
+                                self.right_clicked_node = Some(key.clone());
+                            }
+                        }
+                        MouseButton::Middle => {
+                            if node.is_middle_clicked {
+                                self.middle_clicked_node = Some(key.clone());
+                            }
+                        }
                     }
                 }
             }
@@ -102,7 +161,7 @@ impl AppState {
     }
 
     pub fn cursor_moved(&mut self, cursor: Cursor) {
-        if let Some(clicked_node_id) = self.clicked_node {
+        if let Some(clicked_node_id) = self.left_clicked_node {
             // a node is clicked and being dragged
             if let Some(clicked_node) = self.nodes.get_mut(&clicked_node_id) {
                 if clicked_node.is_nodebar {
@@ -133,19 +192,64 @@ impl AppState {
                 }
             }
         }
+        if let Some(cursor_position) = cursor.position_in(self.graph.bounds) {
+            if let Some(clicked_node_id) = self.right_clicked_node {
+                //edge is being drawn
+                if let Some(edge_id) = self.current_edge {
+                    //keep moving current_edge
+                    if let Some(edge) = self.edges.get_mut(&edge_id) {
+                        edge.to = EdgeConnection::Point(cursor_position);
+                    }
+                } else {
+                    //create a new edge
+                    let new_edge = Edge::new(
+                        EdgeConnection::Node(clicked_node_id),
+                        EdgeConnection::Point(cursor_position),
+                    );
+                    let new_edge_id = Uuid::new_v4();
+                    self.edges.insert(new_edge_id, new_edge);
+                    self.current_edge = Some(new_edge_id);
+                }
+                self.cache.clear();
+            }
+        }
     }
-
     pub fn left_button_pressed(&mut self, cursor: Cursor) {
         self.is_pressed = true;
-        self.get_clicked_node(cursor);
+        self.get_clicked_node(cursor, &MouseButton::Left);
         if let Some(graph_cursor_position) = cursor.position_in(self.graph.bounds) {
             self.last_graph_cursor_position = graph_cursor_position;
         }
     }
 
+    pub fn right_button_pressed(&mut self, cursor: Cursor) {
+        self.get_clicked_node(cursor, &MouseButton::Right);
+        if let Some(graph_cursor_position) = cursor.position_in(self.graph.bounds) {
+            self.last_graph_cursor_position = graph_cursor_position;
+        }
+    }
+
+    pub fn right_button_released(&mut self, cursor: Cursor) {
+        // are we dragging an edge?
+        if let Some(edge_id) = self.current_edge {
+            // is there a node close enough to snap to?            
+            if let Some(snappable_node) = self.get_snappable_node(cursor, &self.nodes) {
+                if let Some(active_edge) = self.edges.get_mut(&edge_id) {
+                    active_edge.to = EdgeConnection::Node(snappable_node);
+                }
+            } else {
+                // nothing to connect to, drop the edge                
+                self.edges.remove(&edge_id);                
+            }            
+            self.current_edge = None;
+        }
+        self.right_clicked_node = None;
+        self.cache.clear();
+    }
+
     pub fn left_button_released(&mut self, cursor: Cursor) {
         self.is_pressed = false;
-        if let Some(clicked_node_id) = self.clicked_node {
+        if let Some(clicked_node_id) = self.left_clicked_node {
             if let Some(clicked_node) = self.nodes.get_mut(&clicked_node_id) {
                 if clicked_node.is_nodebar {
                     if let Some(cursor_position) = cursor.position_in(self.graph.bounds) {
@@ -157,7 +261,7 @@ impl AppState {
             }
         }
         // reset
-        self.clicked_node = None;
+        self.left_clicked_node = None;
         self.cache.clear();
     }
 
@@ -175,13 +279,49 @@ impl AppState {
         let node_id = Uuid::new_v4();
         let node = Node::new(bounds, None, false, name.clone(), body_modal);
 
+        let body_id = Uuid::new_v4();
         let body = Body::new(name, node_id.clone());
 
-        self.bodies.push(body);
+        self.bodies.insert(body_id, body);
         self.nodes.insert(node_id.clone(), node);
         self.modal = None;
         self.cache.clear();
     }
+
+    pub fn save_base(&mut self) {
+        let size = Size::new(100.0, 50.0); //TODO: make width dynamic based on name length
+        let top_left = Point::new(
+            self.last_graph_cursor_position.x - size.width / 2.0,
+            self.last_graph_cursor_position.y - size.height / 2.0,
+        );
+        let bounds = Rectangle::new(top_left, size);
+
+        let node_id = Uuid::new_v4();
+        let node = Node::new(bounds, None, false, "base".to_string(), Modals::Base);
+
+        let base = Base::new(node_id);
+        self.base = Some(base);
+        self.nodes.insert(node_id.clone(), node);
+        self.modal = None;
+        self.cache.clear();
+    }
+
+    fn get_snappable_node(&self, cursor: Cursor, nodes: &HashMap<Uuid, Node>) -> Option<Uuid> {
+        let mut snap_to = None;
+        if let Some(cursor_position) = cursor.position_in(self.graph.bounds) {
+            nodes.iter().for_each(|(id, node)| {
+                if (cursor_position.x > node.bounds.x
+                    && cursor_position.x < node.bounds.x + node.bounds.width)
+                    && (cursor_position.y > node.bounds.y
+                        && cursor_position.y < node.bounds.y + node.bounds.height)
+                {
+                    snap_to = Some(id.clone());
+                }
+            });
+        }
+        snap_to
+    }
+    
 }
 
 fn create_default_node(
@@ -232,11 +372,11 @@ fn default_nodes(node_map: NodeBarMap) -> HashMap<Uuid, Node> {
         "+revolute",
         node_size,
         Point::new(0.0, 100.0),
-        Modals::Revolute,
+        Modals::Revolute(RevoluteModal::new(String::new())),
     );
-
     nodes
 }
+
 
 async fn load() -> Result<(), String> {
     Ok(())
@@ -284,8 +424,11 @@ impl Application for IcedTest {
                 }
                 Message::LeftButtonPressed(cursor) => state.left_button_pressed(cursor),
                 Message::LeftButtonReleased(cursor) => state.left_button_released(cursor),
+                Message::RightButtonPressed(cursor) => state.right_button_pressed(cursor),
+                Message::RightButtonReleased(cursor) => state.right_button_released(cursor),
                 Message::CloseModal => state.modal = None,
                 Message::CursorMoved(cursor) => state.cursor_moved(cursor),
+                Message::SaveBase => state.save_base(),
                 Message::SaveBody(modal) => state.save_body(modal),
                 _ => {}
             },
@@ -323,6 +466,30 @@ impl Application for IcedTest {
                             .nodes
                             .get(&active_modal_id)
                             .and_then(|active_node| match &active_node.modal {
+                                Modals::Base => {
+                                    let content = Column::new();
+
+                                    let footer = Row::new()
+                                        .spacing(10)
+                                        .padding(5)
+                                        .width(Length::Fill)
+                                        .push(
+                                            button("Cancel")
+                                                .width(Length::Fill)
+                                                .on_press(crate::Message::CloseModal),
+                                        )
+                                        .push(
+                                            button("Ok")
+                                                .width(Length::Fill)
+                                                .on_press(crate::Message::SaveBase),
+                                        );
+
+                                    Some(
+                                        card("Body Information", content)
+                                            .foot(footer)
+                                            .max_width(500.0),
+                                    )
+                                }
                                 Modals::Body(body) => {
                                     let body_clone = body.clone();
                                     let content = Column::new().push(

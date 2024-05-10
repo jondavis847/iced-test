@@ -7,9 +7,12 @@ use iced::{
     },
     Point, Rectangle, Renderer, Theme,
 };
+
+pub mod edge;
 pub mod graph;
 pub mod node;
 pub mod node_bar;
+pub mod themes;
 
 use crate::Message;
 
@@ -57,6 +60,12 @@ impl<'a> canvas::Program<Message> for GraphCanvas<'a> {
                 mouse::Event::ButtonReleased(mouse::Button::Left) => {
                     (Status::Captured, Some(Message::LeftButtonReleased(cursor)))
                 }
+                mouse::Event::ButtonPressed(mouse::Button::Right) => {
+                    (Status::Captured, Some(Message::RightButtonPressed(cursor)))
+                }
+                mouse::Event::ButtonReleased(mouse::Button::Right) => {
+                    (Status::Captured, Some(Message::RightButtonReleased(cursor)))
+                }
                 mouse::Event::CursorMoved { position: _ } => {
                     (Status::Captured, Some(Message::CursorMoved(cursor)))
                 }
@@ -75,27 +84,45 @@ impl<'a> canvas::Program<Message> for GraphCanvas<'a> {
         _cursor: mouse::Cursor,
     ) -> Vec<Geometry> {
         let all_content = self.app_state.cache.draw(renderer, bounds.size(), |frame| {
-            // create nodes that are not clipped first (nodebar)
-            self.app_state.nodes.iter().for_each(|(_, node)| {
-                if node.is_nodebar {
-                    node.draw(frame, theme)
-                }
-            });
 
-            // create nodes that clipped (graph)
-            frame.with_clip(self.app_state.graph.bounds, |frame| {
-                self.app_state.nodes.iter().for_each(|(_, node)| {
-                    if !node.is_nodebar {
-                        node.draw(frame, theme)
-                    }
-                });
-            });
+            
+            // node_bar border
+            frame.stroke(
+                &Path::rectangle(Point::ORIGIN, self.app_state.nodebar.bounds.size()),
+                Stroke::default().with_width(2.0),
+            );
 
             // canvas border
             frame.stroke(
                 &Path::rectangle(Point::ORIGIN, frame.size()),
                 Stroke::default().with_width(2.0),
             );
+
+
+            // create edges (before nodes so nodes clip)
+            frame.with_clip(self.app_state.graph.bounds, |frame| {
+                self.app_state.edges.iter().for_each(|(_, edge)| {                    
+                    edge.draw(frame, &self.app_state.nodes, &self.app_state.theme)                    
+                });
+            });
+
+            // create nodes that are not clipped (nodebar)
+            self.app_state.nodes.iter().for_each(|(_, node)| {
+                if node.is_nodebar {
+                    node.draw(frame, &self.app_state.theme)
+                }
+            });
+
+            // create nodes that are clipped (graph)
+            frame.with_clip(self.app_state.graph.bounds, |frame| {
+                self.app_state.nodes.iter().for_each(|(_, node)| {
+                    if !node.is_nodebar {
+                        node.draw(frame, &self.app_state.theme)
+                    }
+                });
+            });
+            
+
         });
         vec![all_content]
     }

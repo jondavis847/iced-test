@@ -1,9 +1,9 @@
-use iced::{Color,Point};
+use iced::Point;
 use iced::widget::canvas::{Path,stroke::{self,Stroke}};
 use uuid::Uuid;
 use std::collections::HashMap;
 use crate::ui::canvas::node::Node;
-use crate::ui::canvas::themes::Theme;
+use crate::ui::theme::Theme;
 
 #[derive(Debug, Clone)]
 pub enum EdgeConnection {
@@ -49,7 +49,7 @@ impl Edge {
             frame.stroke(
                 &path,
                 Stroke {
-                    style: stroke::Style::Solid(theme.edge_multibody),
+                    style: stroke::Style::Solid(theme.primary),
                     width: 3.0,
                     ..Stroke::default()
                 },

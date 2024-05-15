@@ -4,7 +4,9 @@ use iced::{
     alignment, font,
     mouse::Cursor,
     widget::{
-        button, canvas::{Cache, Canvas}, container, shader::wgpu::core::instance::GetSurfaceSupportError, text, text_input, Column, Row
+        button,
+        canvas::{Cache, Canvas},
+        container, text, text_input, Column, Row,
     },
     Application, Command, Element, Length, Point, Rectangle, Settings, Size,
 };
@@ -69,7 +71,7 @@ struct AppState {
     modal: Option<Uuid>, //uuid of node, modal is owned by node
     nodebar: NodeBar,
     nodes: HashMap<Uuid, Node>,
-    theme: crate::ui::canvas::themes::Theme,
+    theme: crate::ui::theme::Theme,
 }
 
 impl Default for AppState {
@@ -91,7 +93,7 @@ impl Default for AppState {
             modal: None,
             nodebar: nodebar,
             nodes: default_nodes,
-            theme: crate::ui::canvas::themes::Themes::dracula(),
+            theme: crate::ui::theme::Theme::ORANGE,
             //theme: crate::ui::canvas::themes::Themes::cyberpunk(),
         }
     }
@@ -232,15 +234,15 @@ impl AppState {
     pub fn right_button_released(&mut self, cursor: Cursor) {
         // are we dragging an edge?
         if let Some(edge_id) = self.current_edge {
-            // is there a node close enough to snap to?            
+            // is there a node close enough to snap to?
             if let Some(snappable_node) = self.get_snappable_node(cursor, &self.nodes) {
                 if let Some(active_edge) = self.edges.get_mut(&edge_id) {
                     active_edge.to = EdgeConnection::Node(snappable_node);
                 }
             } else {
-                // nothing to connect to, drop the edge                
-                self.edges.remove(&edge_id);                
-            }            
+                // nothing to connect to, drop the edge
+                self.edges.remove(&edge_id);
+            }
             self.current_edge = None;
         }
         self.right_clicked_node = None;
@@ -321,7 +323,6 @@ impl AppState {
         }
         snap_to
     }
-    
 }
 
 fn create_default_node(
@@ -345,7 +346,12 @@ fn create_default_node(
 }
 fn default_nodes(node_map: NodeBarMap) -> HashMap<Uuid, Node> {
     let mut nodes = HashMap::<Uuid, Node>::new();
-    let node_size = Size::new(100.0, 50.0);
+
+    let padding = 15.0;
+    let mut count = 1.0;
+    let height = 50.0;
+
+    let node_size = Size::new(100.0, height);
 
     //add base node
     create_default_node(
@@ -353,30 +359,33 @@ fn default_nodes(node_map: NodeBarMap) -> HashMap<Uuid, Node> {
         node_map.base,
         "+base",
         node_size,
-        Point::new(0.0, 0.0),
+        Point::new(padding, count*padding + (count-1.0) * height),
         Modals::Base,
     );
+    count += 1.0;
 
     create_default_node(
         &mut nodes,
         node_map.body,
         "+body",
         node_size,
-        Point::new(0.0, 50.0),
+        Point::new(padding, count*padding + (count-1.0) * height),
         Modals::Body(BodyModal::new(String::new())),
     );
+    count += 1.0;
 
     create_default_node(
         &mut nodes,
         node_map.revolute,
         "+revolute",
         node_size,
-        Point::new(0.0, 100.0),
+        Point::new(padding, count*padding + (count-1.0) * height),
         Modals::Revolute(RevoluteModal::new(String::new())),
     );
+    count += 1.0;
+    
     nodes
 }
-
 
 async fn load() -> Result<(), String> {
     Ok(())
@@ -384,7 +393,7 @@ async fn load() -> Result<(), String> {
 
 impl Application for IcedTest {
     type Message = Message;
-    type Theme = iced::Theme;
+    type Theme = crate::ui::theme::Theme;
     type Executor = iced::executor::Default;
     type Flags = ();
 
@@ -396,10 +405,6 @@ impl Application for IcedTest {
                 Command::perform(load(), Message::Loaded),
             ]),
         )
-    }
-
-    fn theme(&self) -> Self::Theme {
-        Self::Theme::Oxocarbon
     }
 
     fn title(&self) -> String {
@@ -436,7 +441,7 @@ impl Application for IcedTest {
         Command::none()
     }
 
-    fn view(&self) -> Element<Message> {
+    fn view(&self) -> Element<Message, crate::ui::theme::Theme> {
         match self {
             IcedTest::Loading => container(
                 text("Loading...")

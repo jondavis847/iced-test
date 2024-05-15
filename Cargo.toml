@@ -6,9 +6,6 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-iced_aw = { version = "0.8.0", features = ["modal", "card", "floating_element"] }
+iced = {version = "0.12.1", features=["canvas"]}
+iced_aw = { version = "0.9.3", features = ["modal", "card", "floating_element"] }
 uuid = { version = "1.8.0", features = ["v4"] }
-
-[dependencies.iced]
-version = "0.12.1"
-features = ["canvas"]

@@ -5,16 +5,16 @@ use iced::{
         event::{Event, Status},
         Geometry, Path, Stroke,
     },
-    Point, Rectangle, Renderer, Theme,
+    Point, Rectangle, Renderer,
 };
 
 pub mod edge;
 pub mod graph;
 pub mod node;
 pub mod node_bar;
-pub mod themes;
 
 use crate::Message;
+use crate::ui::theme::Theme;
 
 #[derive(Debug)]
 pub struct GraphCanvas<'a> {
@@ -38,7 +38,7 @@ impl Default for CanvasState {
     }
 }
 
-impl<'a> canvas::Program<Message> for GraphCanvas<'a> {
+impl<'a> canvas::Program<Message,Theme> for GraphCanvas<'a> {
     type State = ();
 
     fn update(
@@ -79,7 +79,7 @@ impl<'a> canvas::Program<Message> for GraphCanvas<'a> {
         &self,
         _state: &Self::State,
         renderer: &Renderer,
-        theme: &Theme,
+        _theme: &Theme,
         bounds: Rectangle,
         _cursor: mouse::Cursor,
     ) -> Vec<Geometry> {

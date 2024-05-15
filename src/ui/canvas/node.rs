@@ -1,14 +1,12 @@
 use crate::font::Font;
 use crate::ui::modals::Modals;
-use crate::ui::canvas::themes::Theme;
+use crate::ui::theme::Theme;
 
 use iced::{
     alignment::{Horizontal, Vertical},
     widget::canvas::{path::Path, stroke, Frame, Stroke, Text},
     Color, Point, Rectangle, Vector,
 };
-
-
 
 #[derive(Debug, Clone)]
 pub struct Node {
@@ -47,12 +45,12 @@ impl Node {
 
         let node_border_color;
         if self.is_left_clicked {
-            node_border_color = theme.edge_multibody;
+            node_border_color = theme.highlight;
         } else {
             if self.is_nodebar {
-                node_border_color = theme.dark_border;
+                node_border_color = theme.border;
             } else {
-                node_border_color = theme.edge_multibody;
+                node_border_color = theme.primary;
             }
         }
 
@@ -70,7 +68,7 @@ impl Node {
             frame.fill(&background, node_background_color);
             frame.fill_text(Text {
                 content: self.label.clone(),
-                color: theme.edge_multibody,
+                color: Color::WHITE, //theme.edge_multibody,
                 font: Font::MONOSPACE,
                 horizontal_alignment: Horizontal::Center,
                 position: self.bounds.center(),

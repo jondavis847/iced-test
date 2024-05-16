@@ -23,14 +23,41 @@ impl Body {
     }
 }
 
+#[derive(Debug, Clone)]
 pub enum Joint {
     Floating,
     Prismatic,
-    Revolute,
+    Revolute(Revolute),
     Spherical,
 }
 
+#[derive(Debug, Clone)]
 pub struct Connection {
-    inner_body: Body,
-    outer_body: Body,    
+    inner_body: Option<Body>,
+    outer_body: Option<Body>,    
+}
+impl Default for Connection {
+    fn default() -> Self {
+        Self {
+            inner_body: None,
+            outer_body: None,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Revolute {
+    name: String,
+    connection: Connection,
+    node: Uuid,
+}
+
+impl Revolute {
+    pub fn new(name: String, id: Uuid) -> Self {
+        Self {
+            name: name,
+            connection: Connection::default(),
+            node: id,
+        }
+    }
 }

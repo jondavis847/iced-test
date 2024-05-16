@@ -11,6 +11,7 @@ use iced::{
     Application, Command, Element, Length, Point, Rectangle, Settings, Size,
 };
 use iced_aw::{card, modal};
+use multibody::Revolute;
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 use uuid::Uuid;
@@ -18,7 +19,7 @@ use uuid::Uuid;
 mod multibody;
 mod ui;
 
-use crate::multibody::{Base, Body};
+use crate::multibody::{Base, Body, Joint};
 use crate::ui::canvas::edge::{Edge, EdgeConnection};
 use crate::ui::canvas::graph::Graph;
 use crate::ui::canvas::node::Node;
@@ -35,7 +36,8 @@ fn main() -> iced::Result {
 // Define the possible user interactions
 #[derive(Debug, Clone)]
 enum Message {
-    AddBodyNameInputChanged(String),
+    BodyNameInputChanged(String),
+    RevoluteNameInputChanged(String),
     LeftButtonPressed(Cursor),
     LeftButtonReleased(Cursor),
     RightButtonPressed(Cursor),
@@ -47,6 +49,7 @@ enum Message {
     Loaded(Result<(), String>),
     SaveBase,
     SaveBody(BodyModal),
+    SaveRevolute(RevoluteModal),
 }
 
 #[derive(Debug)]
@@ -58,9 +61,10 @@ enum IcedTest {
 #[derive(Debug)]
 struct AppState {
     base: Option<Base>,
-    bodies: HashMap<Uuid, Body>,
+    bodies: HashMap<Uuid, crate::multibody::Body>,
     cache: Cache,
     //connections: HashMap<Uuid,Connection>,
+    joints: HashMap<Uuid, crate::multibody::Joint>,
     left_clicked_node: Option<Uuid>,
     left_clicked_time_1: Option<Instant>,
     left_clicked_time_2: Option<Instant>,
@@ -85,6 +89,7 @@ impl Default for AppState {
         Self {
             base: None,
             bodies: HashMap::new(),
+            joints: HashMap::new(),
             cache: Cache::new(),
             left_clicked_node: None,
             left_clicked_time_1: None,
@@ -299,6 +304,10 @@ impl AppState {
 
         // Handle the click event on the node
         if let Some(clicked_node_id) = self.left_clicked_node {
+            // First clear any selected_nodes 
+            self.nodes.iter_mut().for_each(|(_,node)| {
+                node.is_selected = false;
+            });
             if let Some(clicked_node) = self.nodes.get_mut(&clicked_node_id) {
                 match release_event {
                     MouseButtonReleaseEvents::DoubleClick => {
@@ -433,6 +442,30 @@ impl AppState {
         self.cache.clear();
     }
 
+    pub fn save_revolute(&mut self, modal: RevoluteModal) {
+        let name = modal.name.clone();
+        let joint_modal = Modals::Revolute(modal);
+
+        let size = Size::new(100.0, 50.0); //TODO: make width dynamic based on name length
+        let top_left = Point::new(
+            self.last_graph_cursor_position.x - size.width / 2.0,
+            self.last_graph_cursor_position.y - size.height / 2.0,
+        );
+        let bounds = Rectangle::new(top_left, size);
+
+        let node_id = Uuid::new_v4();
+        let node = Node::new(bounds, None, false, name.clone(), joint_modal);
+
+        let joint_id = Uuid::new_v4();
+        let revolute = Revolute::new(name.clone(), joint_id);
+        let joint = Joint::Revolute(revolute);
+
+        self.joints.insert(joint_id, joint);
+        self.nodes.insert(node_id.clone(), node);
+        self.modal = None;
+        self.cache.clear();
+    }
+
     fn get_snappable_node(&self, cursor: Cursor, nodes: &HashMap<Uuid, Node>) -> Option<Uuid> {
         let mut snap_to = None;
         if let Some(cursor_position) = cursor.position_in(self.graph.bounds) {
@@ -544,11 +577,19 @@ impl Application for IcedTest {
                 }
             }
             IcedTest::Loaded(state) => match message {
-                Message::AddBodyNameInputChanged(value) => {
+                Message::BodyNameInputChanged(value) => {
                     let add_body_node = state.nodes.get_mut(&state.nodebar.map.body);
                     if let Some(add_body_node) = add_body_node {
                         if let Modals::Body(ref mut body_modal) = &mut add_body_node.modal {
                             body_modal.name = value.clone();
+                        }
+                    }
+                }
+                Message::RevoluteNameInputChanged(value) => {
+                    let add_joint_node = state.nodes.get_mut(&state.nodebar.map.revolute);
+                    if let Some(add_joint_node) = add_joint_node {
+                        if let Modals::Revolute(ref mut joint_modal) = &mut add_joint_node.modal {
+                            joint_modal.name = value.clone();
                         }
                     }
                 }
@@ -561,6 +602,7 @@ impl Application for IcedTest {
                 Message::DeletePressed => state.delete_pressed(),
                 Message::SaveBase => state.save_base(),
                 Message::SaveBody(modal) => state.save_body(modal),
+                Message::SaveRevolute(modal) => state.save_revolute(modal),
                 _ => {}
             },
         }
@@ -580,6 +622,7 @@ impl Application for IcedTest {
             .center_x()
             .into(),
             IcedTest::Loaded(state) => {
+                
                 let graph_canvas = GraphCanvas::new(state);
                 let graph_container = container(
                     Canvas::new(graph_canvas)
@@ -625,7 +668,7 @@ impl Application for IcedTest {
                                     let body_clone = body.clone();
                                     let content = Column::new().push(
                                         text_input("name", &body_clone.name).on_input(|string| {
-                                            crate::Message::AddBodyNameInputChanged(string)
+                                            crate::Message::BodyNameInputChanged(string)
                                         }),
                                     );
 
@@ -644,6 +687,33 @@ impl Application for IcedTest {
 
                                     Some(
                                         card("Body Information", content)
+                                            .foot(footer)
+                                            .max_width(500.0),
+                                    )
+                                }
+                                Modals::Revolute(joint) => {
+                                    let joint_clone = joint.clone();
+                                    let content = Column::new().push(
+                                        text_input("name", &joint_clone.name).on_input(|string| {
+                                            crate::Message::RevoluteNameInputChanged(string)
+                                        }),
+                                    );
+
+                                    let footer = Row::new()
+                                        .spacing(10)
+                                        .padding(5)
+                                        .width(Length::Fill)
+                                        .push(
+                                            button("Cancel")
+                                                .width(Length::Fill)
+                                                .on_press(crate::Message::CloseModal),
+                                        )
+                                        .push(button("Ok").width(Length::Fill).on_press(
+                                            crate::Message::SaveRevolute(joint_clone.clone()),
+                                        ));
+
+                                    Some(
+                                        card("Revolute Information", content)
                                             .foot(footer)
                                             .max_width(500.0),
                                     )
@@ -677,3 +747,4 @@ impl Application for IcedTest {
         })
     }
 }
+

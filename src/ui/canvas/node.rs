@@ -45,8 +45,28 @@ impl Node {
         }
     }
 
+    fn draw_node_path(&self) -> Path {
+        let bounds = self.bounds;
+        let corner_radius = 3.0;
+
+        let path = Path::new(|p| {
+            p.move_to(Point::new(bounds.x + corner_radius, bounds.y));
+            p.line_to(Point::new(bounds.x + bounds.width - corner_radius, bounds.y));
+            p.arc_to(Point::new(bounds.x + bounds.width, bounds.y), Point::new(bounds.x + bounds.width, bounds.y + corner_radius), corner_radius);
+            p.line_to(Point::new(bounds.x + bounds.width, bounds.y + bounds.height - corner_radius));
+            p.arc_to(Point::new(bounds.x + bounds.width, bounds.y + bounds.height), Point::new(bounds.x + bounds.width - corner_radius, bounds.y + bounds.height), corner_radius);
+            p.line_to(Point::new(bounds.x + corner_radius, bounds.y + bounds.height));
+            p.arc_to(Point::new(bounds.x, bounds.y + bounds.height), Point::new(bounds.x, bounds.y + bounds.height - corner_radius), corner_radius);
+            p.line_to(Point::new(bounds.x, bounds.y + corner_radius));
+            p.arc_to(Point::new(bounds.x, bounds.y), Point::new(bounds.x + corner_radius, bounds.y), corner_radius);
+        });
+    
+        path
+    }
+
     pub fn draw(&self, frame: &mut Frame, theme: &Theme) {
-        let background = Path::rectangle(self.bounds.position(), self.bounds.size());
+        
+        let background = self.draw_node_path();
 
         let node_border_color;
         if self.is_selected {

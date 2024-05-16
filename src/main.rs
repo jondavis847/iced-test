@@ -1,4 +1,4 @@
-#![windows_subsystem = "windows"]
+//#![windows_subsystem = "windows"]
 
 use iced::{
     alignment, font,
@@ -10,10 +10,10 @@ use iced::{
     },
     Application, Command, Element, Length, Point, Rectangle, Settings, Size,
 };
-use std::collections::HashMap;
-use uuid::Uuid;
-
 use iced_aw::{card, modal};
+use std::collections::HashMap;
+use std::time::{Duration, Instant};
+use uuid::Uuid;
 
 mod multibody;
 mod ui;
@@ -42,6 +42,7 @@ enum Message {
     RightButtonReleased(Cursor),
     CursorMoved(Cursor),
     CloseModal,
+    DeletePressed,
     FontLoaded(Result<(), font::Error>),
     Loaded(Result<(), String>),
     SaveBase,
@@ -61,8 +62,11 @@ struct AppState {
     cache: Cache,
     //connections: HashMap<Uuid,Connection>,
     left_clicked_node: Option<Uuid>,
+    left_clicked_time_1: Option<Instant>,
+    left_clicked_time_2: Option<Instant>,
     right_clicked_node: Option<Uuid>,
     middle_clicked_node: Option<Uuid>,
+    selected_node: Option<Uuid>,
     current_edge: Option<Uuid>,
     edges: HashMap<Uuid, Edge>,
     graph: Graph,
@@ -83,8 +87,11 @@ impl Default for AppState {
             bodies: HashMap::new(),
             cache: Cache::new(),
             left_clicked_node: None,
+            left_clicked_time_1: None,
+            left_clicked_time_2: None,
             right_clicked_node: None,
             middle_clicked_node: None,
+            selected_node: None,
             current_edge: None,
             edges: HashMap::new(),
             graph: Graph::default(),
@@ -103,6 +110,13 @@ enum MouseButton {
     Left,
     Right,
     Middle,
+}
+
+#[derive(Debug)]
+enum MouseButtonReleaseEvents {
+    SingleClick,
+    DoubleClick,
+    Held,
 }
 
 impl AppState {
@@ -211,6 +225,10 @@ impl AppState {
                     let new_edge_id = Uuid::new_v4();
                     self.edges.insert(new_edge_id, new_edge);
                     self.current_edge = Some(new_edge_id);
+                    //add the edge to the from node so that if from node is deleted, edge is deleted
+                    if let Some(from_node) = self.nodes.get_mut(&clicked_node_id) {
+                        from_node.edges.push(new_edge_id);
+                    }
                 }
                 self.cache.clear();
             }
@@ -218,10 +236,101 @@ impl AppState {
     }
     pub fn left_button_pressed(&mut self, cursor: Cursor) {
         self.is_pressed = true;
+
+        if let Some(left_clicked_time_1) = self.left_clicked_time_1 {
+            if left_clicked_time_1.elapsed() > Duration::from_millis(200) {
+                // too long for double click, just a single click
+                self.left_clicked_time_1 = Some(Instant::now());
+            } else {
+                //within double click, but need to wait for second release
+                self.left_clicked_time_2 = Some(Instant::now());
+            }
+        } else {
+            // self.left_clicked_time_1 was None
+            self.left_clicked_time_1 = Some(Instant::now());
+        }
+
         self.get_clicked_node(cursor, &MouseButton::Left);
+        if let Some(selected_node) = self.left_clicked_node {
+            self.selected_node = Some(selected_node);
+        } else {
+            self.selected_node = None;
+        }
         if let Some(graph_cursor_position) = cursor.position_in(self.graph.bounds) {
             self.last_graph_cursor_position = graph_cursor_position;
         }
+    }
+
+    pub fn left_button_released(&mut self, cursor: Cursor) {
+        self.is_pressed = false;
+
+        // Determine the type of mouse button release event
+        let release_event = match (self.left_clicked_time_1, self.left_clicked_time_2) {
+            (Some(clicked_time_1), Some(clicked_time_2)) => {
+                let clicked_elapsed_time_1 = clicked_time_1.elapsed();
+                let clicked_elapsed_time_2 = clicked_time_2.elapsed();
+
+                if clicked_elapsed_time_1 <= Duration::from_millis(500)
+                    && clicked_elapsed_time_2 <= Duration::from_millis(200)
+                {
+                    MouseButtonReleaseEvents::DoubleClick
+                } else {
+                    MouseButtonReleaseEvents::SingleClick
+                }
+            }
+            (Some(clicked_time_1), None) => {
+                if clicked_time_1.elapsed() <= Duration::from_millis(200) {
+                    MouseButtonReleaseEvents::SingleClick
+                } else {
+                    MouseButtonReleaseEvents::Held
+                }
+            }
+            _ => MouseButtonReleaseEvents::Held,
+        };
+
+        // Reset click times appropriately
+        if matches!(
+            release_event,
+            MouseButtonReleaseEvents::SingleClick | MouseButtonReleaseEvents::DoubleClick
+        ) {
+            self.left_clicked_time_1 = None;
+            self.left_clicked_time_2 = None;
+        }
+
+        // Handle the click event on the node
+        if let Some(clicked_node_id) = self.left_clicked_node {
+            if let Some(clicked_node) = self.nodes.get_mut(&clicked_node_id) {
+                match release_event {
+                    MouseButtonReleaseEvents::DoubleClick => {
+                        // Handle double click if needed
+                    }
+                    MouseButtonReleaseEvents::SingleClick => {
+                        if !clicked_node.is_nodebar {
+                            clicked_node.is_selected = true;
+                        }
+                    }
+                    MouseButtonReleaseEvents::Held => {
+                        if clicked_node.is_nodebar {
+                            if let Some(cursor_position) = cursor.position_in(self.graph.bounds) {
+                                self.last_graph_cursor_position = cursor_position;
+                            }
+                            self.modal = Some(clicked_node_id);
+                        }
+                        clicked_node.drop();
+                    }
+                }
+            }
+            self.left_clicked_node = None;
+        } else {
+            // Clear all selections if no node was clicked
+            self.nodes
+                .values_mut()
+                .for_each(|node| node.is_selected = false);
+            self.selected_node = None;
+        }
+
+        // Clear the cache
+        self.cache.clear();
     }
 
     pub fn right_button_pressed(&mut self, cursor: Cursor) {
@@ -235,9 +344,17 @@ impl AppState {
         // are we dragging an edge?
         if let Some(edge_id) = self.current_edge {
             // is there a node close enough to snap to?
-            if let Some(snappable_node) = self.get_snappable_node(cursor, &self.nodes) {
+            if let Some(snappable_node_id) = self.get_snappable_node(cursor, &self.nodes) {
+                // if this edge_id still has a value in the hashmap
                 if let Some(active_edge) = self.edges.get_mut(&edge_id) {
-                    active_edge.to = EdgeConnection::Node(snappable_node);
+                    // add the snappable nodes id to the edges "to" field
+                    active_edge.to = EdgeConnection::Node(snappable_node_id);
+                    // if the snappable node is still in the nodes hashmap
+                    // TODO: may need to force this or it will panic on delete of the node if it doesnt exist in the hashmap
+                    if let Some(snappable_node) = self.nodes.get_mut(&snappable_node_id) {
+                        // add this edge to it's vector of edges
+                        snappable_node.edges.push(edge_id);
+                    }
                 }
             } else {
                 // nothing to connect to, drop the edge
@@ -249,22 +366,30 @@ impl AppState {
         self.cache.clear();
     }
 
-    pub fn left_button_released(&mut self, cursor: Cursor) {
-        self.is_pressed = false;
-        if let Some(clicked_node_id) = self.left_clicked_node {
-            if let Some(clicked_node) = self.nodes.get_mut(&clicked_node_id) {
-                if clicked_node.is_nodebar {
-                    if let Some(cursor_position) = cursor.position_in(self.graph.bounds) {
-                        self.last_graph_cursor_position = cursor_position;
-                    }
-                    self.modal = Some(clicked_node_id);
+    pub fn delete_pressed(&mut self) {
+        if let Some(selected_node_id) = self.selected_node {
+            // Collect edges to be removed
+            let edges_to_remove = if let Some(selected_node) = self.nodes.get(&selected_node_id) {
+                selected_node.edges.clone()
+            } else {
+                Vec::new()
+            };
+
+            // Remove edges from all nodes and edges collection
+            for edge_id in edges_to_remove {
+                for node in self.nodes.values_mut() {
+                    node.edges.retain(|x| x != &edge_id);
                 }
-                clicked_node.drop();
+                self.edges.remove(&edge_id);
             }
+
+            // Remove the selected node itself
+            self.nodes.remove(&selected_node_id);
+            self.selected_node = None;
+
+            // Clear the cache
+            self.cache.clear();
         }
-        // reset
-        self.left_clicked_node = None;
-        self.cache.clear();
     }
 
     pub fn save_body(&mut self, modal: BodyModal) {
@@ -359,7 +484,7 @@ fn default_nodes(node_map: NodeBarMap) -> HashMap<Uuid, Node> {
         node_map.base,
         "+base",
         node_size,
-        Point::new(padding, count*padding + (count-1.0) * height),
+        Point::new(padding, count * padding + (count - 1.0) * height),
         Modals::Base,
     );
     count += 1.0;
@@ -369,7 +494,7 @@ fn default_nodes(node_map: NodeBarMap) -> HashMap<Uuid, Node> {
         node_map.body,
         "+body",
         node_size,
-        Point::new(padding, count*padding + (count-1.0) * height),
+        Point::new(padding, count * padding + (count - 1.0) * height),
         Modals::Body(BodyModal::new(String::new())),
     );
     count += 1.0;
@@ -379,11 +504,11 @@ fn default_nodes(node_map: NodeBarMap) -> HashMap<Uuid, Node> {
         node_map.revolute,
         "+revolute",
         node_size,
-        Point::new(padding, count*padding + (count-1.0) * height),
+        Point::new(padding, count * padding + (count - 1.0) * height),
         Modals::Revolute(RevoluteModal::new(String::new())),
     );
     count += 1.0;
-    
+
     nodes
 }
 
@@ -433,6 +558,7 @@ impl Application for IcedTest {
                 Message::RightButtonReleased(cursor) => state.right_button_released(cursor),
                 Message::CloseModal => state.modal = None,
                 Message::CursorMoved(cursor) => state.cursor_moved(cursor),
+                Message::DeletePressed => state.delete_pressed(),
                 Message::SaveBase => state.save_base(),
                 Message::SaveBody(modal) => state.save_body(modal),
                 _ => {}
@@ -490,7 +616,7 @@ impl Application for IcedTest {
                                         );
 
                                     Some(
-                                        card("Body Information", content)
+                                        card("Base Information", content)
                                             .foot(footer)
                                             .max_width(500.0),
                                     )
@@ -534,5 +660,20 @@ impl Application for IcedTest {
                     .into()
             }
         }
+    }
+
+    fn subscription(&self) -> iced::Subscription<Message> {
+        use iced::keyboard::{self, key};
+
+        keyboard::on_key_press(|key, modifiers| {
+            let keyboard::Key::Named(key) = key else {
+                return None;
+            };
+            println!("{:?}", key);
+            match (key, modifiers) {
+                (key::Named::Delete, _) => Some(Message::DeletePressed),
+                _ => None,
+            }
+        })
     }
 }

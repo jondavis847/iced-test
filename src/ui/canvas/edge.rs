@@ -32,7 +32,7 @@ impl Edge {
             EdgeConnection::Node(id) => nodes.get(&id).unwrap().bounds.center(),
             EdgeConnection::Point(point) => point,
         };
-
+        
         let to_point = match self.to {
             EdgeConnection::Node(id) => nodes.get(&id).unwrap().bounds.center(),
             EdgeConnection::Point(point) => point,

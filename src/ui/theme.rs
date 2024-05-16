@@ -12,8 +12,9 @@ macro_rules! color {
 
 #[derive(Debug)]
 pub struct Theme {
-    pub background: Color,
+    pub background: Color,    
     pub node_background: Color,
+    pub text_background: Color,
     pub text: Color,
     pub greyed: Color,
     pub border: Color,
@@ -24,14 +25,15 @@ pub struct Theme {
 
 impl Theme {
     pub const ORANGE: Self = Self {
-        background: color!(64, 61, 57),
-        node_background: color!(51, 49, 46),
-        text: color!(255, 252, 242),
+        background: color!(37, 37, 38),        
+        node_background: color!(30, 30, 31),
+        text_background: color!(47, 47, 48),
+        text: color!(204, 204, 200),
         greyed: color!(204, 197, 185),
-        border: color!(37, 36, 34),
+        border: color!(0, 0, 0),
         shadow: color!(37, 36, 34),
-        primary: color! (255, 140, 0),
-        highlight: color!(255,255,0),
+        primary: color!(235, 161, 66),
+        highlight: color!(212, 207, 40),
     };
 }
 
@@ -101,7 +103,7 @@ impl iced::widget::button::StyleSheet for Theme {
 
     fn active(&self, _style: &Self::Style) -> iced::widget::button::Appearance {
         iced::widget::button::Appearance {
-            background: Some(iced::Background::Color(self.background)),
+            background: Some(iced::Background::Color(self.node_background)),
             text_color: self.text,
             ..Default::default()
         }
@@ -114,8 +116,10 @@ impl iced_aw::style::card::StyleSheet for Theme {
     fn active(&self, _style: &Self::Style) -> iced_aw::style::card::Appearance {
         iced_aw::style::card::Appearance {
             background: iced::Background::Color(self.background),
-            head_background: iced::Background::Color(self.primary),
-            ..Default::default()
+            head_background: iced::Background::Color(self.node_background),
+            head_text_color: self.primary,
+            border_color: self.border,
+            ..iced_aw::style::card::Appearance::default()
         }
     }
 }
@@ -124,26 +128,20 @@ impl iced::widget::text_input::StyleSheet for Theme {
     type Style = Application;
 
     fn active(&self, _style: &Self::Style) -> iced::widget::text_input::Appearance {
-        let border = iced::Border{            
-            color: self.border,
-            ..Default::default()
-        };
-        
+        let border = iced::Border::default();
+
         iced::widget::text_input::Appearance {
-            background: iced::Background::Color(self.background),            
+            background: iced::Background::Color(self.text_background),
             border: border,
             icon_color: self.shadow,
         }
     }
 
     fn focused(&self, _style: &Self::Style) -> iced::widget::text_input::Appearance {
-        let border = iced::Border{            
-            color: self.border,
-            ..Default::default()
-        };
-        
+        let border = iced::Border::default();
+
         iced::widget::text_input::Appearance {
-            background: iced::Background::Color(self.background),            
+            background: iced::Background::Color(self.text_background),
             border: border,
             icon_color: self.shadow,
         }
@@ -166,26 +164,29 @@ impl iced::widget::text_input::StyleSheet for Theme {
     }
 
     fn disabled(&self, _style: &Self::Style) -> iced::widget::text_input::Appearance {
-        let border = iced::Border{            
+        let border = iced::Border {
             color: self.border,
             ..Default::default()
         };
-        
+
         iced::widget::text_input::Appearance {
-            background: iced::Background::Color(self.background),            
+            background: iced::Background::Color(self.background),
             border: border,
             icon_color: self.shadow,
         }
     }
-
-
 }
 
 impl iced_aw::style::modal::StyleSheet for Theme {
     type Style = ();
     fn active(&self, _style: &Self::Style) -> iced_aw::style::modal::Appearance {
         iced_aw::style::modal::Appearance {
-            background: self.background.into(),
+            background: iced::Background::Color(Color::from_rgba(
+                self.background.r,
+                self.background.g,
+                self.background.b,
+                0.95,
+            )),
         }
     }
 }

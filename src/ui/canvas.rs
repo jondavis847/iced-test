@@ -52,7 +52,7 @@ impl<'a> canvas::Program<Message,Theme> for GraphCanvas<'a> {
             return (Status::Ignored, None);
         };
 
-        match event {
+        match event {            
             Event::Mouse(mouse_event) => match mouse_event {
                 mouse::Event::ButtonPressed(mouse::Button::Left) => {
                     (Status::Captured, Some(Message::LeftButtonPressed(cursor)))

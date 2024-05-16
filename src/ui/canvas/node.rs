@@ -1,6 +1,7 @@
 use crate::font::Font;
 use crate::ui::modals::Modals;
 use crate::ui::theme::Theme;
+use uuid::Uuid;
 
 use iced::{
     alignment::{Horizontal, Vertical},
@@ -16,8 +17,10 @@ pub struct Node {
     pub is_middle_clicked: bool,
     pub is_nodebar: bool,
     pub is_right_clicked: bool,
+    pub is_selected: bool,
     pub label: String,
     pub modal: Modals,
+    pub edges: Vec<Uuid>,
 }
 
 impl Node {
@@ -34,9 +37,11 @@ impl Node {
             is_left_clicked: false,
             is_middle_clicked: false,
             is_nodebar: is_nodebar,
+            is_selected: false,
             is_right_clicked: false,
             label: label,
             modal: modal,
+            edges: Vec::new(),
         }
     }
 
@@ -44,14 +49,10 @@ impl Node {
         let background = Path::rectangle(self.bounds.position(), self.bounds.size());
 
         let node_border_color;
-        if self.is_left_clicked {
+        if self.is_selected {
             node_border_color = theme.highlight;
         } else {
-            if self.is_nodebar {
-                node_border_color = theme.border;
-            } else {
-                node_border_color = theme.primary;
-            }
+            node_border_color = theme.primary;
         }
 
         let node_background_color = theme.node_background;

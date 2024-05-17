@@ -11,7 +11,7 @@ macro_rules! color {
 }
 
 #[derive(Debug)]
-pub struct Theme {
+pub struct Theme {    
     pub background: Color,    
     pub node_background: Color,
     pub text_background: Color,
@@ -24,7 +24,7 @@ pub struct Theme {
 }
 
 impl Theme {
-    pub const ORANGE: Self = Self {
+    pub const ORANGE: Self = Self {        
         background: color!(37, 37, 38),        
         node_background: color!(30, 30, 31),
         text_background: color!(47, 47, 48),
@@ -130,11 +130,13 @@ impl iced::widget::text_input::StyleSheet for Theme {
     type Style = Application;
 
     fn active(&self, _style: &Self::Style) -> iced::widget::text_input::Appearance {
-        let border = iced::Border::default();
-
         iced::widget::text_input::Appearance {
             background: iced::Background::Color(self.text_background),
-            border: border,
+            border: iced::Border {
+                color: Color::BLACK,
+                width: 1.0,
+                radius: 0.0.into(),
+            },
             icon_color: self.shadow,
         }
     }

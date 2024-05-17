@@ -2,15 +2,16 @@
 //#![warn(missing_docs)]
 
 use iced::{
-    alignment, font,
+    alignment, font, keyboard,
     mouse::Cursor,
     widget::{
         button,
         canvas::{Cache, Canvas},
         container, text, text_input, Column, Row,
     },
-    Application, Command, Element, Length, Point, Rectangle, Settings, Size,
+    window, Application, Command, Element, Length, Point, Rectangle, Settings, Size, Subscription,
 };
+
 use iced_aw::{card, modal};
 use multibody::Revolute;
 use std::collections::HashMap;
@@ -26,7 +27,7 @@ use crate::ui::canvas::graph::Graph;
 use crate::ui::canvas::node::Node;
 use crate::ui::canvas::node_bar::{NodeBar, NodeBarMap};
 use crate::ui::canvas::GraphCanvas;
-use crate::ui::modals::{BodyModal, Modals, RevoluteModal};
+use crate::ui::modals::Modals;
 
 fn main() -> iced::Result {
     let mut settings = Settings::default();
@@ -38,6 +39,16 @@ fn main() -> iced::Result {
 #[derive(Debug, Clone)]
 enum Message {
     BodyNameInputChanged(String),
+    BodyMassInputChanged(String),
+    BodyCmxInputChanged(String),
+    BodyCmyInputChanged(String),
+    BodyCmzInputChanged(String),
+    BodyIxxInputChanged(String),
+    BodyIyyInputChanged(String),
+    BodyIzzInputChanged(String),
+    BodyIxyInputChanged(String),
+    BodyIxzInputChanged(String),
+    BodyIyzInputChanged(String),
     RevoluteNameInputChanged(String),
     LeftButtonPressed(Cursor),
     LeftButtonReleased(Cursor),
@@ -50,8 +61,9 @@ enum Message {
     FontLoaded(Result<(), font::Error>),
     Loaded(Result<(), String>),
     SaveBase,
-    SaveBody(BodyModal),
-    SaveRevolute(RevoluteModal),
+    SaveBody(Body),
+    SaveRevolute(Revolute),
+    WindowResized(Size),
 }
 
 #[derive(Debug)]
@@ -66,6 +78,8 @@ struct AppState {
     bodies: HashMap<Uuid, crate::multibody::Body>,
     cache: Cache,
     //connections: HashMap<Uuid,Connection>,
+    counter_body: usize,
+    counter_revolute: usize,
     joints: HashMap<Uuid, crate::multibody::Joint>,
     left_clicked_node: Option<Uuid>,
     left_clicked_time_1: Option<Instant>,
@@ -93,6 +107,8 @@ impl Default for AppState {
             bodies: HashMap::new(),
             joints: HashMap::new(),
             cache: Cache::new(),
+            counter_body: 0,
+            counter_revolute: 0,
             left_clicked_node: None,
             left_clicked_time_1: None,
             left_clicked_time_2: None,
@@ -352,29 +368,60 @@ impl AppState {
     }
 
     pub fn right_button_released(&mut self, cursor: Cursor) {
-        // are we dragging an edge?
         if let Some(edge_id) = self.current_edge {
-            // is there a node close enough to snap to?
             if let Some(snappable_node_id) = self.get_snappable_node(cursor, &self.nodes) {
-                // if this edge_id still has a value in the hashmap
-                if let Some(active_edge) = self.edges.get_mut(&edge_id) {
-                    // add the snappable nodes id to the edges "to" field
-                    active_edge.to = EdgeConnection::Node(snappable_node_id);
-                    // if the snappable node is still in the nodes hashmap
-                    // TODO: may need to force this or it will panic on delete of the node if it doesnt exist in the hashmap
-                    if let Some(snappable_node) = self.nodes.get_mut(&snappable_node_id) {
-                        // add this edge to it's vector of edges
-                        snappable_node.edges.push(edge_id);
+                let to_node_modal = self
+                    .nodes
+                    .get(&snappable_node_id)
+                    .map(|node| node.modal.clone());
+
+                if let Some(to_node_modal) = to_node_modal {
+                    let valid_connection = {
+                        if let Some(active_edge) = self.edges.get(&edge_id) {
+                            match active_edge.from {
+                                EdgeConnection::Node(node_id) => {
+                                    self.nodes.get(&node_id).map_or(false, |from_node| {
+                                        self.is_valid_connection(&from_node.modal, &to_node_modal)
+                                    })
+                                }
+                                EdgeConnection::Point(_) => false,
+                            }
+                        } else {
+                            false
+                        }
+                    };
+
+                    if valid_connection {
+                        if let Some(active_edge) = self.edges.get_mut(&edge_id) {
+                            if let EdgeConnection::Node(_) = active_edge.from {
+                                if let Some(to_node) = self.nodes.get_mut(&snappable_node_id) {
+                                    to_node.edges.push(edge_id);
+                                    active_edge.to = EdgeConnection::Node(snappable_node_id);
+                                }
+                            }
+                        }
+                    } else {
+                        self.edges.remove(&edge_id);
                     }
                 }
             } else {
-                // nothing to connect to, drop the edge
                 self.edges.remove(&edge_id);
             }
-            self.current_edge = None;
         }
+
+        self.current_edge = None;
         self.right_clicked_node = None;
         self.cache.clear();
+    }
+
+    fn is_valid_connection(&self, from_modal: &Modals, to_modal: &Modals) -> bool {
+        matches!(
+            (from_modal, to_modal),
+            (Modals::Base, Modals::Revolute(_))
+                | (Modals::Body(_), Modals::Revolute(_))
+                | (Modals::Revolute(_), Modals::Base)
+                | (Modals::Revolute(_), Modals::Body(_))
+        )
     }
 
     pub fn delete_pressed(&mut self) {
@@ -403,39 +450,78 @@ impl AppState {
         }
     }
 
-    pub fn enter_pressed(&mut self) {        
+    /// Handles the enter key press event.
+    ///
+    /// This function is called when the enter key is pressed. It checks if a modal is active,
+    /// retrieves the corresponding node and modal, and then saves the data based on the modal type.
+    /// Finally, it clears the cache.
+    pub fn enter_pressed(&mut self) {
         if let Some(modal_node_id) = self.modal {
+            // If a modal is active, retrieve the corresponding node
             if let Some(modal_node) = self.nodes.get(&modal_node_id) {
-                let this_modal = modal_node.modal.clone();                
-                match this_modal {
+                // Clone the modal to avoid borrowing issues
+                match modal_node.modal.clone() {
                     Modals::Base => self.save_base(),
                     Modals::Body(modal) => self.save_body(modal),
                     Modals::Revolute(modal) => self.save_revolute(modal),
                 }
+                // Clear the cache after saving the data
                 self.cache.clear();
             }
         }
     }
 
-    pub fn save_body(&mut self, modal: BodyModal) {
-        let name = modal.name.clone();
-        let body_modal = Modals::Body(modal);
+    /// Saves a new body to the canvas.
+    ///
+    /// This function is called when adding a new body to the canvas. It ensures that the body has
+    /// a unique name if it doesn't already have one, calculates its position, creates a new node
+    /// for it, and inserts both the body and the node into their respective collections.
+    ///
+    /// # Parameters
+    ///
+    /// * `orig_body` - The original body to be added to the canvas.
+    ///
+    /// # Behavior
+    ///
+    /// - If the body's name is empty, it assigns a unique name in the format `bodyN`, where `N` is
+    ///   a counter incremented for each new body.
+    /// - The function calculates the bounds for the new node based on the last graph cursor position.
+    /// - It creates a new node and assigns a unique ID to both the node and the body.
+    /// - It inserts the new body and node into the `bodies` and `nodes` collections respectively.
+    /// - It clears the modal and the cache after the body is saved.
+    pub fn save_body(&mut self, mut body: Body) {
+        // Ensure the body has a unique name if it's empty
+        if body.name.is_empty() {
+            self.counter_body += 1;
+            body.name = format!("body{}", self.counter_body);
+        }
 
-        let size = Size::new(100.0, 50.0); //TODO: make width dynamic based on name length
+        // Create the body modal with the updated body
+        let body_modal = Modals::Body(body.clone());
+
+        // Calculate the bounds for the new node
+        let size = Size::new(100.0, 50.0); // TODO: make width dynamic based on name length
         let top_left = Point::new(
             self.last_graph_cursor_position.x - size.width / 2.0,
             self.last_graph_cursor_position.y - size.height / 2.0,
         );
         let bounds = Rectangle::new(top_left, size);
 
+        // Generate unique IDs for the node and body
         let node_id = Uuid::new_v4();
-        let node = Node::new(bounds, None, false, name.clone(), body_modal);
-
         let body_id = Uuid::new_v4();
-        let body = Body::new(name, node_id.clone());
 
+        // Update the body with the new node ID
+        body.node = node_id.clone();
+
+        // Create the new node
+        let node = Node::new(bounds, None, false, body.name.clone(), body_modal);
+
+        // Insert the new body and node into their respective collections
         self.bodies.insert(body_id, body);
-        self.nodes.insert(node_id.clone(), node);
+        self.nodes.insert(node_id, node);
+
+        // Clear the modal and cache
         self.modal = None;
         self.cache.clear();
     }
@@ -458,9 +544,14 @@ impl AppState {
         self.cache.clear();
     }
 
-    pub fn save_revolute(&mut self, modal: RevoluteModal) {
-        let name = modal.name.clone();
-        let joint_modal = Modals::Revolute(modal);
+    pub fn save_revolute(&mut self, mut joint: Revolute) {
+        // Ensure the body has a unique name if it's empty
+        if joint.name.is_empty() {
+            self.counter_revolute += 1;
+            joint.name = format!("revolute{}", self.counter_revolute);
+        }
+
+        let joint_modal = Modals::Revolute(joint.clone());
 
         let size = Size::new(100.0, 50.0); //TODO: make width dynamic based on name length
         let top_left = Point::new(
@@ -470,10 +561,10 @@ impl AppState {
         let bounds = Rectangle::new(top_left, size);
 
         let node_id = Uuid::new_v4();
-        let node = Node::new(bounds, None, false, name.clone(), joint_modal);
+        let node = Node::new(bounds, None, false, joint.name.clone(), joint_modal);
 
         let joint_id = Uuid::new_v4();
-        let revolute = Revolute::new(name.clone(), joint_id);
+        let revolute = Revolute::new(joint.name.clone(), joint_id);
         let joint = Joint::Revolute(revolute);
 
         self.joints.insert(joint_id, joint);
@@ -496,6 +587,11 @@ impl AppState {
             });
         }
         snap_to
+    }
+
+    fn window_resized(&mut self, window_size: Size) {
+        self.graph.bounds.height = window_size.height;
+        self.graph.bounds.width = window_size.width - self.nodebar.bounds.width;
     }
 }
 
@@ -544,7 +640,7 @@ fn default_nodes(node_map: NodeBarMap) -> HashMap<Uuid, Node> {
         "+body",
         node_size,
         Point::new(padding, count * padding + (count - 1.0) * height),
-        Modals::Body(BodyModal::new(String::new())),
+        Modals::Body(Body::default()),
     );
     count += 1.0;
 
@@ -554,7 +650,7 @@ fn default_nodes(node_map: NodeBarMap) -> HashMap<Uuid, Node> {
         "+revolute",
         node_size,
         Point::new(padding, count * padding + (count - 1.0) * height),
-        Modals::Revolute(RevoluteModal::new(String::new())),
+        Modals::Revolute(Revolute::default()),
     );
     count += 1.0;
 
@@ -593,12 +689,20 @@ impl Application for IcedTest {
                 }
             }
             IcedTest::Loaded(state) => match message {
-                Message::BodyNameInputChanged(value) => {
-                    update_body_name(state, &value);
-                }
-                Message::RevoluteNameInputChanged(value) => {
-                    update_revolute_name(state, &value);
-                }
+                Message::FontLoaded(_) => {}
+                Message::Loaded(_) => {}
+                Message::BodyNameInputChanged(value) => update_body_name(state, &value),
+                Message::BodyMassInputChanged(value) => update_body_mass(state, &value),
+                Message::BodyCmxInputChanged(value) => update_body_cmx(state, &value),
+                Message::BodyCmyInputChanged(value) => update_body_cmy(state, &value),
+                Message::BodyCmzInputChanged(value) => update_body_cmz(state, &value),
+                Message::BodyIxxInputChanged(value) => update_body_ixx(state, &value),
+                Message::BodyIyyInputChanged(value) => update_body_iyy(state, &value),
+                Message::BodyIzzInputChanged(value) => update_body_izz(state, &value),
+                Message::BodyIxyInputChanged(value) => update_body_ixy(state, &value),
+                Message::BodyIxzInputChanged(value) => update_body_ixz(state, &value),
+                Message::BodyIyzInputChanged(value) => update_body_iyz(state, &value),
+                Message::RevoluteNameInputChanged(value) => update_revolute_name(state, &value),
                 Message::LeftButtonPressed(cursor) => state.left_button_pressed(cursor),
                 Message::LeftButtonReleased(cursor) => state.left_button_released(cursor),
                 Message::RightButtonPressed(cursor) => state.right_button_pressed(cursor),
@@ -610,7 +714,7 @@ impl Application for IcedTest {
                 Message::SaveBase => state.save_base(),
                 Message::SaveBody(modal) => state.save_body(modal),
                 Message::SaveRevolute(modal) => state.save_revolute(modal),
-                _ => {}
+                Message::WindowResized(size) => state.window_resized(size),
             },
         }
         Command::none()
@@ -623,22 +727,31 @@ impl Application for IcedTest {
         }
     }
 
-    fn subscription(&self) -> iced::Subscription<Message> {
-        use iced::keyboard::{self, key};
-
-        keyboard::on_key_press(|key, modifiers| {
-            let keyboard::Key::Named(key) = key else {
-                return None;
-            };            
-            match (key, modifiers) {
-                (key::Named::Delete, _) => Some(Message::DeletePressed),
-                (key::Named::Enter, _) => Some(Message::EnterPressed),
+    fn subscription(&self) -> Subscription<Self::Message> {
+        iced::event::listen_with(|event, _| match event {
+            iced::Event::Window(id, window_event) => match window_event {
+                window::Event::Resized { width, height } => Some(Message::WindowResized(
+                    Size::new(width as f32, height as f32),
+                )),
                 _ => None,
-            }
+            },
+            iced::Event::Keyboard(keyboard_event) => match keyboard_event {
+                keyboard::Event::KeyPressed {
+                    key,
+                    location,
+                    modifiers,
+                    text,
+                } => match key {
+                    iced::keyboard::Key::Named(iced::keyboard::key::Named::Enter) => Some(Message::EnterPressed),
+                    iced::keyboard::Key::Named(iced::keyboard::key::Named::Delete) => Some(Message::DeletePressed),
+                    _ => None,
+                }
+                _ => None,
+            },
+            _ => None,
         })
     }
 }
-
 // Helper function to create the loading view
 fn loading_view() -> Element<'static, Message, crate::ui::theme::Theme> {
     container(
@@ -666,19 +779,19 @@ fn loaded_view(state: &AppState) -> Element<Message, crate::ui::theme::Theme> {
 
     let underlay = Row::new().push(graph_container);
 
-    let overlay = match state.modal {
-        Some(active_modal_id) => {
-            state
-                .nodes
-                .get(&active_modal_id)
-                .and_then(|active_node| match &active_node.modal {
-                    Modals::Base => Some(create_base_modal()),
-                    Modals::Body(body) => Some(create_body_modal(body)),
-                    Modals::Revolute(joint) => Some(create_revolute_modal(joint)),
-                    _ => None,
-                })
+    let overlay = if let Some(active_modal_id) = state.modal {
+        if let Some(active_node) = state.nodes.get(&active_modal_id) {
+            match &active_node.modal {
+                Modals::Base => Some(create_base_modal()),
+                Modals::Body(body) => Some(create_body_modal(body)),
+                Modals::Revolute(joint) => Some(create_revolute_modal(joint)),
+                _ => None,
+            }
+        } else {
+            None
         }
-        None => None,
+    } else {
+        None
     };
 
     modal(underlay, overlay)
@@ -710,13 +823,77 @@ fn create_base_modal() -> Element<'static, Message, crate::ui::theme::Theme> {
         .into()
 }
 
-fn create_body_modal(body: &BodyModal) -> Element<Message, crate::ui::theme::Theme> {
+fn create_body_modal(body: &Body) -> Element<Message, crate::ui::theme::Theme> {
     let body_clone = body.clone();
-    let content = Column::new().push(
-        text_input("name", &body_clone.name)
-            .on_input(|string| crate::Message::BodyNameInputChanged(string))
-            .on_submit(Message::SaveBody(body_clone.clone()))
-    );
+    let create_text_input = |label: &str, value: &str, on_input: fn(String) -> Message| {
+        Row::new()
+            .spacing(10)
+            .push(text(label).width(Length::FillPortion(1)))
+            .push(
+                text_input(label, value)
+                    .on_input(on_input)
+                    .on_submit(Message::SaveBody(body_clone.clone()))
+                    .width(Length::FillPortion(4)),
+            )
+            .width(Length::Fill)
+    };
+
+    let content = Column::new()
+        .push(create_text_input(
+            "name",
+            &body_clone.name,
+            crate::Message::BodyNameInputChanged,
+        ))
+        .push(create_text_input(
+            "mass",
+            &body_clone.mass.to_string(),
+            crate::Message::BodyMassInputChanged,
+        ))
+        .push(create_text_input(
+            "cmx",
+            &body_clone.cmx.to_string(),
+            crate::Message::BodyCmxInputChanged,
+        ))
+        .push(create_text_input(
+            "cmy",
+            &body_clone.cmy.to_string(),
+            crate::Message::BodyCmyInputChanged,
+        ))
+        .push(create_text_input(
+            "cmz",
+            &body_clone.cmz.to_string(),
+            crate::Message::BodyCmzInputChanged,
+        ))
+        .push(create_text_input(
+            "ixx",
+            &body_clone.ixx.to_string(),
+            crate::Message::BodyIxxInputChanged,
+        ))
+        .push(create_text_input(
+            "iyy",
+            &body_clone.iyy.to_string(),
+            crate::Message::BodyIyyInputChanged,
+        ))
+        .push(create_text_input(
+            "izz",
+            &body_clone.izz.to_string(),
+            crate::Message::BodyIzzInputChanged,
+        ))
+        .push(create_text_input(
+            "ixy",
+            &body_clone.ixy.to_string(),
+            crate::Message::BodyIxyInputChanged,
+        ))
+        .push(create_text_input(
+            "ixz",
+            &body_clone.ixz.to_string(),
+            crate::Message::BodyIxzInputChanged,
+        ))
+        .push(create_text_input(
+            "iyz",
+            &body_clone.iyz.to_string(),
+            crate::Message::BodyIyzInputChanged,
+        ));
 
     let footer = Row::new()
         .spacing(10)
@@ -739,12 +916,12 @@ fn create_body_modal(body: &BodyModal) -> Element<Message, crate::ui::theme::The
         .into()
 }
 
-fn create_revolute_modal(joint: &RevoluteModal) -> Element<Message, crate::ui::theme::Theme> {
+fn create_revolute_modal(joint: &Revolute) -> Element<Message, crate::ui::theme::Theme> {
     let joint_clone = joint.clone();
     let content = Column::new().push(
         text_input("name", &joint_clone.name)
             .on_input(|string| crate::Message::RevoluteNameInputChanged(string))
-            .on_submit(Message::SaveRevolute(joint_clone.clone()))
+            .on_submit(Message::SaveRevolute(joint_clone.clone())),
     );
 
     let footer = Row::new()
@@ -768,13 +945,85 @@ fn create_revolute_modal(joint: &RevoluteModal) -> Element<Message, crate::ui::t
         .into()
 }
 
-// Helper function to update the body name
-fn update_body_name(state: &mut AppState, value: &str) {
-    if let Some(add_body_node) = state.nodes.get_mut(&state.nodebar.map.body) {
-        if let Modals::Body(ref mut body_modal) = &mut add_body_node.modal {
-            body_modal.name = value.to_string();
+fn update_body_numeric_field<F>(state: &mut AppState, value: &str, update_fn: F)
+where
+    F: FnOnce(&mut Body, f64),
+{
+    if let Ok(float_value) = value.parse::<f64>() {
+        if let Some(add_body_node) = state.nodes.get_mut(&state.nodebar.map.body) {
+            if let Modals::Body(ref mut body) = add_body_node.modal {
+                update_fn(body, float_value);
+            }
         }
     }
+}
+
+fn update_body_name(state: &mut AppState, value: &str) {
+    if let Some(add_body_node) = state.nodes.get_mut(&state.nodebar.map.body) {
+        if let Modals::Body(ref mut body) = &mut add_body_node.modal {
+            body.name = value.to_string();
+        }
+    }
+}
+
+fn update_body_mass(state: &mut AppState, value: &str) {
+    update_body_numeric_field(state, value, |body, float_value| {
+        body.mass = float_value;
+    });
+}
+
+fn update_body_cmx(state: &mut AppState, value: &str) {
+    update_body_numeric_field(state, value, |body, float_value| {
+        body.cmx = float_value;
+    });
+}
+
+fn update_body_cmy(state: &mut AppState, value: &str) {
+    update_body_numeric_field(state, value, |body, float_value| {
+        body.cmy = float_value;
+    });
+}
+
+fn update_body_cmz(state: &mut AppState, value: &str) {
+    update_body_numeric_field(state, value, |body, float_value| {
+        body.cmz = float_value;
+    });
+}
+
+fn update_body_ixx(state: &mut AppState, value: &str) {
+    update_body_numeric_field(state, value, |body, float_value| {
+        body.ixx = float_value;
+    });
+}
+
+fn update_body_iyy(state: &mut AppState, value: &str) {
+    update_body_numeric_field(state, value, |body, float_value| {
+        body.iyy = float_value;
+    });
+}
+
+fn update_body_izz(state: &mut AppState, value: &str) {
+    update_body_numeric_field(state, value, |body, float_value| {
+        body.izz = float_value;
+    });
+}
+
+fn update_body_ixy(state: &mut AppState, value: &str) {
+    update_body_numeric_field(state, value, |body, float_value| {
+        body.ixy = float_value;
+    });
+}
+
+fn update_body_ixz(state: &mut AppState, value: &str) {
+    update_body_numeric_field(state, value, |body, float_value| {
+        body.ixz = float_value;
+    });
+}
+
+fn update_body_iyz(state: &mut AppState, value: &str) {
+    update_body_numeric_field(state, value, |body, float_value| {
+        body.iyz = float_value;
+    });
 }
 
 // Helper function to update the revolute name

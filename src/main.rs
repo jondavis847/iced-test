@@ -1,4 +1,5 @@
 //#![windows_subsystem = "windows"]
+//#![warn(missing_docs)]
 
 use iced::{
     alignment, font,
@@ -45,6 +46,7 @@ enum Message {
     CursorMoved(Cursor),
     CloseModal,
     DeletePressed,
+    EnterPressed,
     FontLoaded(Result<(), font::Error>),
     Loaded(Result<(), String>),
     SaveBase,
@@ -304,8 +306,8 @@ impl AppState {
 
         // Handle the click event on the node
         if let Some(clicked_node_id) = self.left_clicked_node {
-            // First clear any selected_nodes 
-            self.nodes.iter_mut().for_each(|(_,node)| {
+            // First clear any selected_nodes
+            self.nodes.iter_mut().for_each(|(_, node)| {
                 node.is_selected = false;
             });
             if let Some(clicked_node) = self.nodes.get_mut(&clicked_node_id) {
@@ -398,6 +400,20 @@ impl AppState {
 
             // Clear the cache
             self.cache.clear();
+        }
+    }
+
+    pub fn enter_pressed(&mut self) {        
+        if let Some(modal_node_id) = self.modal {
+            if let Some(modal_node) = self.nodes.get(&modal_node_id) {
+                let this_modal = modal_node.modal.clone();                
+                match this_modal {
+                    Modals::Base => self.save_base(),
+                    Modals::Body(modal) => self.save_body(modal),
+                    Modals::Revolute(modal) => self.save_revolute(modal),
+                }
+                self.cache.clear();
+            }
         }
     }
 
@@ -578,20 +594,10 @@ impl Application for IcedTest {
             }
             IcedTest::Loaded(state) => match message {
                 Message::BodyNameInputChanged(value) => {
-                    let add_body_node = state.nodes.get_mut(&state.nodebar.map.body);
-                    if let Some(add_body_node) = add_body_node {
-                        if let Modals::Body(ref mut body_modal) = &mut add_body_node.modal {
-                            body_modal.name = value.clone();
-                        }
-                    }
+                    update_body_name(state, &value);
                 }
                 Message::RevoluteNameInputChanged(value) => {
-                    let add_joint_node = state.nodes.get_mut(&state.nodebar.map.revolute);
-                    if let Some(add_joint_node) = add_joint_node {
-                        if let Modals::Revolute(ref mut joint_modal) = &mut add_joint_node.modal {
-                            joint_modal.name = value.clone();
-                        }
-                    }
+                    update_revolute_name(state, &value);
                 }
                 Message::LeftButtonPressed(cursor) => state.left_button_pressed(cursor),
                 Message::LeftButtonReleased(cursor) => state.left_button_released(cursor),
@@ -600,6 +606,7 @@ impl Application for IcedTest {
                 Message::CloseModal => state.modal = None,
                 Message::CursorMoved(cursor) => state.cursor_moved(cursor),
                 Message::DeletePressed => state.delete_pressed(),
+                Message::EnterPressed => state.enter_pressed(),
                 Message::SaveBase => state.save_base(),
                 Message::SaveBody(modal) => state.save_body(modal),
                 Message::SaveRevolute(modal) => state.save_revolute(modal),
@@ -611,124 +618,8 @@ impl Application for IcedTest {
 
     fn view(&self) -> Element<Message, crate::ui::theme::Theme> {
         match self {
-            IcedTest::Loading => container(
-                text("Loading...")
-                    .horizontal_alignment(alignment::Horizontal::Center)
-                    .size(50),
-            )
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .center_y()
-            .center_x()
-            .into(),
-            IcedTest::Loaded(state) => {
-                
-                let graph_canvas = GraphCanvas::new(state);
-                let graph_container = container(
-                    Canvas::new(graph_canvas)
-                        .width(Length::Fill)
-                        .height(Length::Fill),
-                )
-                .width(Length::Fill)
-                .height(Length::Fill);
-
-                let underlay = Row::new().push(graph_container);
-
-                let overlay = match state.modal {
-                    Some(active_modal_id) => {
-                        state
-                            .nodes
-                            .get(&active_modal_id)
-                            .and_then(|active_node| match &active_node.modal {
-                                Modals::Base => {
-                                    let content = Column::new();
-
-                                    let footer = Row::new()
-                                        .spacing(10)
-                                        .padding(5)
-                                        .width(Length::Fill)
-                                        .push(
-                                            button("Cancel")
-                                                .width(Length::Fill)
-                                                .on_press(crate::Message::CloseModal),
-                                        )
-                                        .push(
-                                            button("Ok")
-                                                .width(Length::Fill)
-                                                .on_press(crate::Message::SaveBase),
-                                        );
-
-                                    Some(
-                                        card("Base Information", content)
-                                            .foot(footer)
-                                            .max_width(500.0),
-                                    )
-                                }
-                                Modals::Body(body) => {
-                                    let body_clone = body.clone();
-                                    let content = Column::new().push(
-                                        text_input("name", &body_clone.name).on_input(|string| {
-                                            crate::Message::BodyNameInputChanged(string)
-                                        }),
-                                    );
-
-                                    let footer = Row::new()
-                                        .spacing(10)
-                                        .padding(5)
-                                        .width(Length::Fill)
-                                        .push(
-                                            button("Cancel")
-                                                .width(Length::Fill)
-                                                .on_press(crate::Message::CloseModal),
-                                        )
-                                        .push(button("Ok").width(Length::Fill).on_press(
-                                            crate::Message::SaveBody(body_clone.clone()),
-                                        ));
-
-                                    Some(
-                                        card("Body Information", content)
-                                            .foot(footer)
-                                            .max_width(500.0),
-                                    )
-                                }
-                                Modals::Revolute(joint) => {
-                                    let joint_clone = joint.clone();
-                                    let content = Column::new().push(
-                                        text_input("name", &joint_clone.name).on_input(|string| {
-                                            crate::Message::RevoluteNameInputChanged(string)
-                                        }),
-                                    );
-
-                                    let footer = Row::new()
-                                        .spacing(10)
-                                        .padding(5)
-                                        .width(Length::Fill)
-                                        .push(
-                                            button("Cancel")
-                                                .width(Length::Fill)
-                                                .on_press(crate::Message::CloseModal),
-                                        )
-                                        .push(button("Ok").width(Length::Fill).on_press(
-                                            crate::Message::SaveRevolute(joint_clone.clone()),
-                                        ));
-
-                                    Some(
-                                        card("Revolute Information", content)
-                                            .foot(footer)
-                                            .max_width(500.0),
-                                    )
-                                }
-                                _ => None,
-                            })
-                    }
-                    _ => None,
-                };
-
-                modal(underlay, overlay)
-                    .on_esc(Message::CloseModal)
-                    .align_y(alignment::Vertical::Center)
-                    .into()
-            }
+            IcedTest::Loading => loading_view(),
+            IcedTest::Loaded(state) => loaded_view(state),
         }
     }
 
@@ -738,13 +629,159 @@ impl Application for IcedTest {
         keyboard::on_key_press(|key, modifiers| {
             let keyboard::Key::Named(key) = key else {
                 return None;
-            };
-            println!("{:?}", key);
+            };            
             match (key, modifiers) {
                 (key::Named::Delete, _) => Some(Message::DeletePressed),
+                (key::Named::Enter, _) => Some(Message::EnterPressed),
                 _ => None,
             }
         })
     }
 }
 
+// Helper function to create the loading view
+fn loading_view() -> Element<'static, Message, crate::ui::theme::Theme> {
+    container(
+        text("Loading...")
+            .horizontal_alignment(alignment::Horizontal::Center)
+            .size(50),
+    )
+    .width(Length::Fill)
+    .height(Length::Fill)
+    .center_y()
+    .center_x()
+    .into()
+}
+
+// Helper function to create the main loaded view
+fn loaded_view(state: &AppState) -> Element<Message, crate::ui::theme::Theme> {
+    let graph_canvas = GraphCanvas::new(state);
+    let graph_container = container(
+        Canvas::new(graph_canvas)
+            .width(Length::Fill)
+            .height(Length::Fill),
+    )
+    .width(Length::Fill)
+    .height(Length::Fill);
+
+    let underlay = Row::new().push(graph_container);
+
+    let overlay = match state.modal {
+        Some(active_modal_id) => {
+            state
+                .nodes
+                .get(&active_modal_id)
+                .and_then(|active_node| match &active_node.modal {
+                    Modals::Base => Some(create_base_modal()),
+                    Modals::Body(body) => Some(create_body_modal(body)),
+                    Modals::Revolute(joint) => Some(create_revolute_modal(joint)),
+                    _ => None,
+                })
+        }
+        None => None,
+    };
+
+    modal(underlay, overlay)
+        .on_esc(Message::CloseModal)
+        .align_y(alignment::Vertical::Center)
+        .into()
+}
+
+fn create_base_modal() -> Element<'static, Message, crate::ui::theme::Theme> {
+    let content = Column::new();
+    let footer = Row::new()
+        .spacing(10)
+        .padding(5)
+        .width(Length::Fill)
+        .push(
+            button("Cancel")
+                .width(Length::Fill)
+                .on_press(crate::Message::CloseModal),
+        )
+        .push(
+            button("Ok")
+                .width(Length::Fill)
+                .on_press(crate::Message::SaveBase),
+        );
+
+    card("Base Information", content)
+        .foot(footer)
+        .max_width(500.0)
+        .into()
+}
+
+fn create_body_modal(body: &BodyModal) -> Element<Message, crate::ui::theme::Theme> {
+    let body_clone = body.clone();
+    let content = Column::new().push(
+        text_input("name", &body_clone.name)
+            .on_input(|string| crate::Message::BodyNameInputChanged(string))
+            .on_submit(Message::SaveBody(body_clone.clone()))
+    );
+
+    let footer = Row::new()
+        .spacing(10)
+        .padding(5)
+        .width(Length::Fill)
+        .push(
+            button("Cancel")
+                .width(Length::Fill)
+                .on_press(crate::Message::CloseModal),
+        )
+        .push(
+            button("Ok")
+                .width(Length::Fill)
+                .on_press(crate::Message::SaveBody(body_clone.clone())),
+        );
+
+    card("Body Information", content)
+        .foot(footer)
+        .max_width(500.0)
+        .into()
+}
+
+fn create_revolute_modal(joint: &RevoluteModal) -> Element<Message, crate::ui::theme::Theme> {
+    let joint_clone = joint.clone();
+    let content = Column::new().push(
+        text_input("name", &joint_clone.name)
+            .on_input(|string| crate::Message::RevoluteNameInputChanged(string))
+            .on_submit(Message::SaveRevolute(joint_clone.clone()))
+    );
+
+    let footer = Row::new()
+        .spacing(10)
+        .padding(5)
+        .width(Length::Fill)
+        .push(
+            button("Cancel")
+                .width(Length::Fill)
+                .on_press(crate::Message::CloseModal),
+        )
+        .push(
+            button("Ok")
+                .width(Length::Fill)
+                .on_press(crate::Message::SaveRevolute(joint_clone.clone())),
+        );
+
+    card("Revolute Information", content)
+        .foot(footer)
+        .max_width(500.0)
+        .into()
+}
+
+// Helper function to update the body name
+fn update_body_name(state: &mut AppState, value: &str) {
+    if let Some(add_body_node) = state.nodes.get_mut(&state.nodebar.map.body) {
+        if let Modals::Body(ref mut body_modal) = &mut add_body_node.modal {
+            body_modal.name = value.to_string();
+        }
+    }
+}
+
+// Helper function to update the revolute name
+fn update_revolute_name(state: &mut AppState, value: &str) {
+    if let Some(add_joint_node) = state.nodes.get_mut(&state.nodebar.map.revolute) {
+        if let Modals::Revolute(ref mut joint_modal) = &mut add_joint_node.modal {
+            joint_modal.name = value.to_string();
+        }
+    }
+}

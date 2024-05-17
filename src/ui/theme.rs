@@ -32,8 +32,10 @@ impl Theme {
         greyed: color!(204, 197, 185),
         border: color!(0, 0, 0),
         shadow: color!(37, 36, 34),
-        primary: color!(235, 161, 66),
-        highlight: color!(212, 207, 40),
+        //primary: color!(235, 161, 66),
+        //highlight: color!(212, 207, 40),
+        primary: color!(235/2, 161/2, 66/2),
+        highlight: color!(235, 161, 66),
     };
 }
 

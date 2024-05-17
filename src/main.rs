@@ -729,23 +729,12 @@ impl Application for IcedTest {
 
     fn subscription(&self) -> Subscription<Self::Message> {
         iced::event::listen_with(|event, _| match event {
-            iced::Event::Window(id, window_event) => match window_event {
-                window::Event::Resized { width, height } => Some(Message::WindowResized(
-                    Size::new(width as f32, height as f32),
-                )),
-                _ => None,
-            },
-            iced::Event::Keyboard(keyboard_event) => match keyboard_event {
-                keyboard::Event::KeyPressed {
-                    key,
-                    location,
-                    modifiers,
-                    text,
-                } => match key {
-                    iced::keyboard::Key::Named(iced::keyboard::key::Named::Enter) => Some(Message::EnterPressed),
-                    iced::keyboard::Key::Named(iced::keyboard::key::Named::Delete) => Some(Message::DeletePressed),
-                    _ => None,
-                }
+            iced::Event::Window(_, window::Event::Resized { width, height }) => Some(
+                Message::WindowResized(Size::new(width as f32, height as f32)),
+            ),
+            iced::Event::Keyboard(keyboard::Event::KeyPressed { key, .. }) => match key {
+                keyboard::Key::Named(keyboard::key::Named::Enter) => Some(Message::EnterPressed),
+                keyboard::Key::Named(keyboard::key::Named::Delete) => Some(Message::DeletePressed),
                 _ => None,
             },
             _ => None,

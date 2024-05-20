@@ -140,6 +140,7 @@ enum MouseButtonReleaseEvents {
     SingleClick,
     DoubleClick,
     Held,
+    Nothing,
 }
 
 impl AppState {
@@ -260,18 +261,8 @@ impl AppState {
     pub fn left_button_pressed(&mut self, cursor: Cursor) {
         self.is_pressed = true;
 
-        if let Some(left_clicked_time_1) = self.left_clicked_time_1 {
-            if left_clicked_time_1.elapsed() > Duration::from_millis(200) {
-                // too long for double click, just a single click
-                self.left_clicked_time_1 = Some(Instant::now());
-            } else {
-                //within double click, but need to wait for second release
-                self.left_clicked_time_2 = Some(Instant::now());
-            }
-        } else {
-            // self.left_clicked_time_1 was None
-            self.left_clicked_time_1 = Some(Instant::now());
-        }
+        self.left_clicked_time_1 = self.left_clicked_time_2;
+        self.left_clicked_time_2 = Some(Instant::now());
 
         self.get_clicked_node(cursor, &MouseButton::Left);
         if let Some(selected_node) = self.left_clicked_node {
@@ -288,38 +279,30 @@ impl AppState {
         self.is_pressed = false;
 
         // Determine the type of mouse button release event
-        let release_event = match (self.left_clicked_time_1, self.left_clicked_time_2) {
+        let release_event = match (self.left_clicked_time_1, self.left_clicked_time_2) {            
+            
             (Some(clicked_time_1), Some(clicked_time_2)) => {
                 let clicked_elapsed_time_1 = clicked_time_1.elapsed();
                 let clicked_elapsed_time_2 = clicked_time_2.elapsed();
 
-                if clicked_elapsed_time_1 <= Duration::from_millis(500)
-                    && clicked_elapsed_time_2 <= Duration::from_millis(200)
-                {
+                if clicked_elapsed_time_1 <= Duration::from_millis(500) {
                     MouseButtonReleaseEvents::DoubleClick
-                } else {
-                    MouseButtonReleaseEvents::SingleClick
-                }
-            }
-            (Some(clicked_time_1), None) => {
-                if clicked_time_1.elapsed() <= Duration::from_millis(200) {
+                } else if clicked_elapsed_time_2 <= Duration::from_millis(300) {
                     MouseButtonReleaseEvents::SingleClick
                 } else {
                     MouseButtonReleaseEvents::Held
                 }
             }
-            _ => MouseButtonReleaseEvents::Held,
+            (None,Some(clicked_time_2)) => {
+                if clicked_time_2.elapsed() <= Duration::from_millis(200) {
+                    MouseButtonReleaseEvents::SingleClick
+                } else {
+                    MouseButtonReleaseEvents::Held
+                }
+            }
+            _ => MouseButtonReleaseEvents::Nothing,
         };
-
-        // Reset click times appropriately
-        if matches!(
-            release_event,
-            MouseButtonReleaseEvents::SingleClick | MouseButtonReleaseEvents::DoubleClick
-        ) {
-            self.left_clicked_time_1 = None;
-            self.left_clicked_time_2 = None;
-        }
-
+        
         // Handle the click event on the node
         if let Some(clicked_node_id) = self.left_clicked_node {
             // First clear any selected_nodes
@@ -329,7 +312,7 @@ impl AppState {
             if let Some(clicked_node) = self.nodes.get_mut(&clicked_node_id) {
                 match release_event {
                     MouseButtonReleaseEvents::DoubleClick => {
-                        // Handle double click if needed
+                        self.modal = Some(clicked_node_id);
                     }
                     MouseButtonReleaseEvents::SingleClick => {
                         if !clicked_node.is_nodebar {
@@ -345,6 +328,7 @@ impl AppState {
                         }
                         clicked_node.drop();
                     }
+                    MouseButtonReleaseEvents::Nothing => {}
                 }
             }
             self.left_clicked_node = None;

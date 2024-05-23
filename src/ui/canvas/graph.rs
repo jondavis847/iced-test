@@ -14,7 +14,7 @@ pub enum GraphMessage {
 
 #[derive(Debug, Clone)]
 pub struct GraphNode {
-    pub component_id: Uuid,    
+    pub component_id: Uuid,
     pub edges: Vec<Uuid>,
     pub node: Node,
 }
@@ -23,7 +23,7 @@ impl GraphNode {
     fn new(component_id: Uuid, node: Node) -> Self {
         let edges = Vec::new();
         Self {
-            component_id,            
+            component_id,
             edges,
             node,
         }
@@ -66,14 +66,15 @@ impl Default for Graph {
 }
 
 impl Graph {
-    pub fn cursor_moved(&mut self, cursor: Cursor) {
+    pub fn cursor_moved(&mut self, cursor: Cursor) -> bool {
+        let mut redraw = false;
         if let Some(clicked_node_id) = self.left_clicked_node {
             // a node is clicked and being dragged
             if let Some(graphnode) = self.nodes.get_mut(&clicked_node_id) {
-                let mut clicked_node = graphnode.node;
+                let clicked_node = &mut graphnode.node;
                 if let Some(cursor_position) = cursor.position_in(self.bounds) {
                     clicked_node.translate_to(cursor_position);
-                    self.last_cursor_position = Some(cursor_position);
+                    redraw = true;
                 }
             }
         } else {
@@ -85,12 +86,13 @@ impl Graph {
                         self.nodes.iter_mut().for_each(|(_, graphnode)| {
                             graphnode.node.translate_by(delta);
                         });
+                        redraw = true;
                     }
-                    self.last_cursor_position = Some(graph_cursor_position);
                 }
             }
         }
         if let Some(cursor_position) = cursor.position_in(self.bounds) {
+            self.last_cursor_position = Some(cursor_position);
             if let Some(clicked_node_id) = self.right_clicked_node {
                 //edge is being drawn
                 if let Some(edge_id) = self.current_edge {
@@ -112,8 +114,10 @@ impl Graph {
                         from_node.edges.push(new_edge_id);
                     }
                 }
+                redraw = true;
             }
         }
+        redraw
     }
 
     pub fn delete_pressed(&mut self) {
@@ -139,42 +143,6 @@ impl Graph {
         }
     }
 
-    pub fn get_clicked_node(&mut self, cursor: Cursor, mouse_button: &MouseButton) {
-        match mouse_button {
-            MouseButton::Left => self.left_clicked_node = None,
-            MouseButton::Right => self.right_clicked_node = None,
-            MouseButton::Middle => {}
-        }
-        if let Some(cursor_position) = cursor.position_in(self.bounds) {
-            self.nodes.iter_mut().for_each(|(id, graphnode)| {
-                let mut node = graphnode.node;
-                node.is_clicked(cursor_position, mouse_button);
-
-                match mouse_button {
-                    MouseButton::Left => {
-                        if node.is_left_clicked {
-                            self.left_clicked_node = Some(*id);
-                        }
-                    }
-                    MouseButton::Right => {
-                        if node.is_right_clicked {
-                            self.right_clicked_node = Some(*id);
-                        }
-                    }
-                    MouseButton::Middle => {}
-                }
-            });
-        }
-        if let Some(selected_node) = self.left_clicked_node {
-            self.selected_node = Some(selected_node);
-        } else {
-            self.selected_node = None;
-        }
-        if let Some(graph_cursor_position) = cursor.position_in(self.bounds) {
-            self.last_cursor_position = Some(graph_cursor_position);
-        }
-    }
-
     /// Finds a node within snapping distance of the cursor on the graph, if any.
     ///
     /// # Arguments
@@ -197,7 +165,7 @@ impl Graph {
                 .nodes
                 .iter()
                 .find(|(_, graphnode)| {
-                    let node = graphnode.node;
+                    let node = &graphnode.node;
                     // Check if the cursor's x and y positions are within the node's bounds
                     cursor_position.x > node.bounds.x
                         && cursor_position.x < node.bounds.x + node.bounds.width
@@ -238,6 +206,30 @@ impl Graph {
         }
     }
 
+    pub fn left_button_pressed(&mut self, cursor: Cursor) {
+        self.left_clicked_node = None;
+    
+        if let Some(cursor_position) = cursor.position_in(self.bounds) {
+            self.last_cursor_position = Some(cursor_position);
+            
+            // Clear the nodes' selected flags and determine the clicked node
+            for (id, graphnode) in &mut self.nodes {
+                let node = &mut graphnode.node;
+                node.is_selected = false;
+                node.is_clicked(cursor_position, &MouseButton::Left);
+    
+                if node.is_left_clicked {
+                    node.is_selected = true;
+                    self.left_clicked_node = Some(*id);
+                }
+            }
+        }
+    
+        // Update selected_node based on whether a node was clicked
+        self.selected_node = self.left_clicked_node;
+    }
+    
+
     pub fn left_button_released(
         &mut self,
         release_event: &MouseButtonReleaseEvents,
@@ -246,20 +238,28 @@ impl Graph {
         self.is_clicked = false;
         let mut message = None;
 
+        if let Some(cursor_position) = cursor.position_in(self.bounds) {
+            self.last_cursor_position = Some(cursor_position);
+        }
+
+        //clear the nodes selected flags, to be reapplied on click
+        self.nodes.iter_mut().for_each(|(_, graphnode)| {
+            graphnode.node.is_selected = false;
+        });
+
         if let Some(clicked_node_id) = self.left_clicked_node {
-            if let Some(graphnode) = self.nodes.get(&clicked_node_id) {
-                let mut clicked_node = graphnode.node;
+            if let Some(graphnode) = self.nodes.get_mut(&clicked_node_id) {
+                let clicked_node = &mut graphnode.node;
                 match release_event {
                     MouseButtonReleaseEvents::DoubleClick => {
+                        clicked_node.is_selected = true;
                         message = Some(GraphMessage::EditComponent(clicked_node_id));
                     }
                     MouseButtonReleaseEvents::SingleClick => {
                         clicked_node.is_selected = true;
                     }
                     MouseButtonReleaseEvents::Held => {
-                        if let Some(cursor_position) = cursor.position_in(self.bounds) {
-                            self.last_cursor_position = Some(cursor_position);
-                        }
+                        clicked_node.is_selected = true;
                     }
                     MouseButtonReleaseEvents::Nothing => {}
                 }
@@ -273,6 +273,21 @@ impl Graph {
         }
         self.left_clicked_node = None;
         message
+    }
+
+    pub fn right_button_pressed(&mut self, cursor: Cursor) {
+        self.right_clicked_node = None;
+    
+        if let Some(cursor_position) = cursor.position_in(self.bounds) {
+            for (id, graphnode) in &mut self.nodes {
+                let node = &mut graphnode.node;
+                node.is_clicked(cursor_position, &MouseButton::Right);
+                if node.is_right_clicked {
+                    self.right_clicked_node = Some(*id);
+                }
+            }
+            self.last_cursor_position = Some(cursor_position);
+        }
     }
 
     pub fn right_button_released(&mut self, cursor: Cursor) {
@@ -331,10 +346,9 @@ impl Graph {
             let component_id = Uuid::new_v4();
             let node_id = Uuid::new_v4();
             let name_id = Uuid::new_v4();
-            let dummy_id = dummy.get_id();
 
             // Create the new component from it's dummy
-            let mut new_component =
+            let new_component =
                 MultibodyComponent::from_dummy(component_id, node_id, name_id, dummy);
 
             // Calculate the bounds for the new node
@@ -345,14 +359,13 @@ impl Graph {
             );
             let bounds = Rectangle::new(top_left, size);
 
-            // Insert the name of the component/node to names
-            let name = dummy.get_name().to_string();
-            self.names.insert(name_id, name);
             // Create the new node
+            let name = dummy.get_name().to_string();
             let new_node = Node::new(bounds);
             let graph_node = GraphNode::new(component_id, new_node);
 
             // Insert the new component and node into their respective collections
+            self.names.insert(name_id, name);
             self.components.insert(component_id, new_component);
             self.nodes.insert(node_id, graph_node);
         }

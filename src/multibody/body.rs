@@ -23,16 +23,16 @@ impl Body {
         let meta = MultibodyMeta::new(component_id, dummy.get_id(),name_id, node_id);
         Self {
             meta,
-            mass: dummy.mass.parse().expect("Failed to parse mass"),
-            cmx: dummy.cmx.parse().expect("Failed to parse cmx"),
-            cmy: dummy.cmy.parse().expect("Failed to parse cmy"),
-            cmz: dummy.cmz.parse().expect("Failed to parse cmz"),
-            ixx: dummy.ixx.parse().expect("Failed to parse ixx"),
-            iyy: dummy.iyy.parse().expect("Failed to parse iyy"),
-            izz: dummy.izz.parse().expect("Failed to parse izz"),
-            ixy: dummy.ixy.parse().expect("Failed to parse ixy"),
-            ixz: dummy.ixz.parse().expect("Failed to parse ixz"),
-            iyz: dummy.iyz.parse().expect("Failed to parse iyz"),
+            mass: dummy.mass.parse().unwrap_or(1.0),
+            cmx: dummy.cmx.parse().unwrap_or(0.0),
+            cmy: dummy.cmy.parse().unwrap_or(0.0),
+            cmz: dummy.cmz.parse().unwrap_or(0.0),
+            ixx: dummy.ixx.parse().unwrap_or(1.0),
+            iyy: dummy.iyy.parse().unwrap_or(1.0),
+            izz: dummy.izz.parse().unwrap_or(1.0),
+            ixy: dummy.ixy.parse().unwrap_or(0.0),
+            ixz: dummy.ixz.parse().unwrap_or(0.0),
+            iyz: dummy.iyz.parse().unwrap_or(0.0),
         }
     }
 }

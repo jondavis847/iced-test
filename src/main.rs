@@ -79,7 +79,7 @@ struct AppState {
     //connections: HashMap<Uuid,Connection>,
     counter_body: usize,
     counter_revolute: usize,
-    current_edge: Option<Uuid>,
+    //current_edge: Option<Uuid>,
     //edges: HashMap<Uuid, Edge>,
     graph: Graph,
     //is_pressed: bool,
@@ -90,7 +90,7 @@ struct AppState {
     left_clicked_time_2: Option<Instant>,
     //middle_clicked_node: Option<Uuid>,
     modal: Option<ActiveModal>, //uuid of node, modal is owned by node
-    names: HashMap<Uuid, String>,
+    //names: HashMap<Uuid, String>,
     nodebar: Nodebar,
     //nodes: HashMap<Uuid, Node>,
     //right_clicked_node: Option<Uuid>,
@@ -113,9 +113,9 @@ impl Default for AppState {
             left_clicked_time_2: None,
             //right_clicked_node: None,
             //middle_clicked_node: None,
-            names: HashMap::new(),
+            //names: HashMap::new(),
             //selected_node: None,
-            current_edge: None,
+            //current_edge: None,
             //edges: HashMap::new(),
             graph: Graph::default(),
             //is_pressed: false,
@@ -144,24 +144,23 @@ enum MouseButtonReleaseEvents {
 }
 
 impl AppState {
-    pub fn get_clicked_node(&mut self, cursor: Cursor, mouse_button: &MouseButton) {
-        self.nodebar.get_clicked_node(cursor, mouse_button);
-        self.graph.get_clicked_node(cursor, mouse_button);
-        self.cache.clear();
-    }
-
+    
     pub fn cursor_moved(&mut self, cursor: Cursor) {
-        self.nodebar.cursor_moved(cursor);
-        self.cache.clear();
-        self.graph.cursor_moved(cursor);
-        self.cache.clear();
+        let nodebar_redraw = self.nodebar.cursor_moved(cursor);
+        let graph_redraw = self.graph.cursor_moved(cursor);
+
+        // don't need to redraw just because mouse is moving
+        if nodebar_redraw || graph_redraw {
+            self.cache.clear();
+        }
     }
 
     pub fn left_button_pressed(&mut self, cursor: Cursor) {
         self.left_clicked_time_1 = self.left_clicked_time_2;
         self.left_clicked_time_2 = Some(Instant::now());
 
-        self.get_clicked_node(cursor, &MouseButton::Left);
+        self.nodebar.left_button_pressed(cursor);
+        self.graph.left_button_pressed(cursor);        
         self.cache.clear();
     }
 
@@ -189,7 +188,16 @@ impl AppState {
             }
             _ => MouseButtonReleaseEvents::Nothing,
         };
-
+        if let Some(bar_message) = self.nodebar.left_button_released(&release_event) {
+            match bar_message {
+                NodebarMessage::NewComponent(id) => {                        
+                    if let Some(component) = self.nodebar.components.get(&id) {
+                        let active_modal = ActiveModal::new(id, None);
+                        self.modal = Some(active_modal);
+                    }
+                }
+            }
+        }
         if let Some(graph_message) = self.graph.left_button_released(&release_event, cursor) {
             match graph_message {
                 GraphMessage::EditComponent(id) => {                    
@@ -212,35 +220,19 @@ impl AppState {
                 }
             }
         }
-        if let Some(bar_message) = self.nodebar.left_button_released(&release_event) {
-            match bar_message {
-                NodebarMessage::NewComponent(id) => {                        
-                    if let Some(component) = self.nodebar.components.get(&id) {
-                        let active_modal = ActiveModal::new(id, None);
-                        self.modal = Some(active_modal);
-                    }
-                }
-            }
-        }
+        
         self.cache.clear();
     }
 
     pub fn right_button_pressed(&mut self, cursor: Cursor) {
-        self.get_clicked_node(cursor, &MouseButton::Right);
+        self.nodebar.right_button_pressed(cursor);
+        self.graph.right_button_pressed(cursor);        
     }
 
     pub fn right_button_released(&mut self, cursor: Cursor) {
         self.graph.right_button_released(cursor);
-        //self.nodebar.right_button_released(); //no use for it yet
+        self.nodebar.right_button_released(cursor);
         self.cache.clear();
-    }
-
-    fn get_name(&self, id: &Uuid) -> Option<&String> {
-        self.names.get(id)
-    }
-
-    fn set_name(&mut self, id: &Uuid, name: String) {
-        self.names.insert(*id, name);
     }
 
     pub fn delete_pressed(&mut self) {

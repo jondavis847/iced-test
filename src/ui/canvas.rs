@@ -111,16 +111,16 @@ impl<'a> canvas::Program<Message, Theme> for GraphCanvas<'a> {
                 .iter()
                 .for_each(|(_, nodebarnode)| {
                     let label = &nodebarnode.label;
-                    nodebarnode.node.draw(frame, &self.app_state.theme, label);
+                    nodebarnode.node.draw(frame, &self.app_state.theme, label);                    
                 });
 
             // create nodes that are clipped (graph)
-            frame.with_clip(self.app_state.graph.bounds, |frame| {
+            frame.with_clip(self.app_state.graph.bounds, |frame| {                
                 self.app_state
                     .graph
                     .nodes
                     .iter()
-                    .for_each(|(_, graphnode)| {
+                    .for_each(|(_, graphnode)| {                        
                         if let Some(component) =
                             self.app_state.graph.components.get(&graphnode.component_id)
                         {

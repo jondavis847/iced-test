@@ -43,7 +43,7 @@ pub struct Graph {
     pub nodes: HashMap<Uuid, GraphNode>,
     right_clicked_node: Option<Uuid>,
     selected_node: Option<Uuid>,
-    zoom: f32,
+    //zoom: f32,
 }
 
 impl Default for Graph {
@@ -60,7 +60,7 @@ impl Default for Graph {
             nodes: HashMap::new(),
             right_clicked_node: None,
             selected_node: None,
-            zoom: 1.0,
+            //zoom: 1.0,
         }
     }
 }
@@ -68,48 +68,49 @@ impl Default for Graph {
 impl Graph {
     pub fn cursor_moved(&mut self, cursor: Cursor) -> bool {
         let mut redraw = false;
+        let cursor_position = cursor.position_in(self.bounds);
+    
+        // Handle left-clicked node dragging
         if let Some(clicked_node_id) = self.left_clicked_node {
-            // a node is clicked and being dragged
             if let Some(graphnode) = self.nodes.get_mut(&clicked_node_id) {
-                let clicked_node = &mut graphnode.node;
-                if let Some(cursor_position) = cursor.position_in(self.bounds) {
-                    clicked_node.translate_to(cursor_position);
+                if let Some(position) = cursor_position {
+                    graphnode.node.translate_to(position);
                     redraw = true;
                 }
             }
-        } else {
-            // no node is clicked, graph is translating if the cursor is clicked on the graph
-            if self.is_clicked {
-                if let Some(graph_cursor_position) = cursor.position_in(self.bounds) {
-                    if let Some(last_cursor_position) = self.last_cursor_position {
-                        let delta = graph_cursor_position - last_cursor_position;
-                        self.nodes.iter_mut().for_each(|(_, graphnode)| {
-                            graphnode.node.translate_by(delta);
-                        });
-                        redraw = true;
-                    }
+        } else if self.is_clicked {
+            // Handle graph translating
+            if let Some(graph_cursor_position) = cursor_position {
+                if let Some(last_position) = self.last_cursor_position {
+                    let delta = graph_cursor_position - last_position;
+                    self.nodes.iter_mut().for_each(|(_, graphnode)| {
+                        graphnode.node.translate_by(delta);
+                    });
+                    redraw = true;
                 }
             }
         }
-        if let Some(cursor_position) = cursor.position_in(self.bounds) {
-            self.last_cursor_position = Some(cursor_position);
+    
+        // Update last cursor position
+        if let Some(position) = cursor_position {
+            self.last_cursor_position = Some(position);
+    
+            // Handle right-clicked node for edge drawing
             if let Some(clicked_node_id) = self.right_clicked_node {
-                //edge is being drawn
                 if let Some(edge_id) = self.current_edge {
-                    //keep moving current_edge
                     if let Some(edge) = self.edges.get_mut(&edge_id) {
-                        edge.to = EdgeConnection::Point(cursor_position);
+                        edge.to = EdgeConnection::Point(position);
                     }
                 } else {
-                    //create a new edge
                     let new_edge = Edge::new(
                         EdgeConnection::Node(clicked_node_id),
-                        EdgeConnection::Point(cursor_position),
+                        EdgeConnection::Point(position),
                     );
                     let new_edge_id = Uuid::new_v4();
                     self.edges.insert(new_edge_id, new_edge);
                     self.current_edge = Some(new_edge_id);
-                    //add the edge to the from node so that if from node is deleted, edge is deleted
+    
+                    // Add the edge to the from node
                     if let Some(from_node) = self.nodes.get_mut(&clicked_node_id) {
                         from_node.edges.push(new_edge_id);
                     }
@@ -117,6 +118,7 @@ impl Graph {
                 redraw = true;
             }
         }
+    
         redraw
     }
 

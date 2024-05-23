@@ -1,5 +1,5 @@
 use super::{MultibodyMeta, MultibodyTrait};
-use crate::ui::dummies::{DummyBase, DummyComponent, DummyTrait};
+use crate::ui::dummies::DummyComponent;
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Copy)]
@@ -33,7 +33,7 @@ impl MultibodyTrait for Base {
 
     fn inherit_from(&mut self, dummy: &DummyComponent) {
         match dummy {
-            DummyComponent::Base(base) => {                
+            DummyComponent::Base(_) => {                
             }
             _ => {} // error! must be dummy base
         }

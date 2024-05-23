@@ -120,30 +120,6 @@ impl Nodebar {
         redraw
     }
 
-    pub fn get_clicked_node(&mut self, cursor: Cursor, mouse_button: &MouseButton) {
-        match mouse_button {
-            MouseButton::Left => self.left_clicked_node = None,
-            MouseButton::Right => {}
-            MouseButton::Middle => {}
-        }
-        if cursor.is_over(self.bounds) {
-            self.nodes.iter_mut().for_each(|(id, nodebarnode)| {
-                // use canvas position
-                if let Some(cursor_position) = cursor.position() {
-                    nodebarnode.node.is_clicked(cursor_position, mouse_button);
-                    match mouse_button {
-                        MouseButton::Left => {
-                            if nodebarnode.node.is_left_clicked {
-                                self.left_clicked_node = Some(*id);
-                            }
-                        }
-                        _ => {}
-                    }
-                }
-            });
-        }
-    }
-
     pub fn left_button_pressed(&mut self, cursor: Cursor) {
         self.left_clicked_node = None;
 
@@ -169,8 +145,7 @@ impl Nodebar {
         let mut message = None;
 
         if let Some(clicked_node_id) = self.left_clicked_node {
-            if let Some(nodebarnode) = self.nodes.get_mut(&clicked_node_id) {
-                let clicked_node = &mut nodebarnode.node;
+            if let Some(nodebarnode) = self.nodes.get_mut(&clicked_node_id) {                
                 match release_event {
                     MouseButtonReleaseEvents::DoubleClick => {}
                     MouseButtonReleaseEvents::SingleClick => {                        

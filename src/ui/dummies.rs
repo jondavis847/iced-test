@@ -92,7 +92,7 @@ impl DummyTrait for DummyBase {
     fn inherit_from(&mut self, component_id: &Uuid, graph: &Graph) {
         if let Some(component) = graph.components.get(component_id) {
             match component {
-                MultibodyComponent::Base(base) => {
+                MultibodyComponent::Base(_) => {
                     if let Some(name) = graph.names.get(&component.get_name_id()) {
                         self.set_name(name);
                     }
@@ -221,7 +221,7 @@ impl DummyTrait for DummyRevolute {
                             self.set_name(name);
                         }                        
                     }
-                    _ => {} //TODO: error! must be a revolute
+                    //_ => {} //TODO: error! must be a revolute
                 }
                 _ => {} // TODO: error! must be a joint
             }

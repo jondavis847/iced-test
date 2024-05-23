@@ -9,21 +9,17 @@ use iced::{
         canvas::{Cache, Canvas},
         container, text, text_input, Column, Row,
     },
-    window, Application, Command, Element, Length, Point, Rectangle, Settings, Size, Subscription,
+    window, Application, Command, Element, Length, Settings, Size, Subscription,
 };
 
 use iced_aw::{card, modal};
-use std::collections::HashMap;
 use std::time::{Duration, Instant};
-use uuid::Uuid;
 
 mod multibody;
 mod ui;
 
-use crate::multibody::{base::Base, body::Body, joints::Joint, MultibodyComponent, MultibodyTrait};
-use crate::ui::canvas::edge::{Edge, EdgeConnection};
+use crate::multibody::MultibodyTrait;
 use crate::ui::canvas::graph::{Graph, GraphMessage};
-use crate::ui::canvas::node::Node;
 use crate::ui::canvas::nodebar::{Nodebar, NodebarMessage};
 use crate::ui::canvas::GraphCanvas;
 use crate::ui::dummies::{DummyBase, DummyBody, DummyComponent, DummyRevolute, DummyTrait};
@@ -71,60 +67,30 @@ enum IcedTest {
 }
 
 #[derive(Debug)]
-struct AppState {
-    //base: Option<Base>,
-    //bodies: HashMap<Uuid, Body>,
-    cache: Cache,
-    //components: HashMap<Uuid, Components>,
-    //connections: HashMap<Uuid,Connection>,
+struct AppState {    
+    cache: Cache,    
     counter_body: usize,
-    counter_revolute: usize,
-    //current_edge: Option<Uuid>,
-    //edges: HashMap<Uuid, Edge>,
-    graph: Graph,
-    //is_pressed: bool,
-    //joints: HashMap<Uuid, crate::multibody::Joint>,
-    //last_graph_cursor_position: Point,
-    //left_clicked_node: Option<Uuid>,
+    counter_revolute: usize,    
+    graph: Graph,    
     left_clicked_time_1: Option<Instant>,
-    left_clicked_time_2: Option<Instant>,
-    //middle_clicked_node: Option<Uuid>,
-    modal: Option<ActiveModal>, //uuid of node, modal is owned by node
-    //names: HashMap<Uuid, String>,
-    nodebar: Nodebar,
-    //nodes: HashMap<Uuid, Node>,
-    //right_clicked_node: Option<Uuid>,
-    //selected_node: Option<Uuid>,
+    left_clicked_time_2: Option<Instant>,    
+    modal: Option<ActiveModal>,
+    nodebar: Nodebar,    
     theme: crate::ui::theme::Theme,
 }
 
 impl Default for AppState {
     fn default() -> Self {
-        Self {
-            //base: None,
-            //bodies: HashMap::new(),
-            // joints: HashMap::new(),
-            cache: Cache::new(),
-            //components: HashMap::new(),
+        Self {            
+            cache: Cache::new(),            
             counter_body: 0,
-            counter_revolute: 0,
-            //left_clicked_node: None,
+            counter_revolute: 0,            
             left_clicked_time_1: None,
-            left_clicked_time_2: None,
-            //right_clicked_node: None,
-            //middle_clicked_node: None,
-            //names: HashMap::new(),
-            //selected_node: None,
-            //current_edge: None,
-            //edges: HashMap::new(),
-            graph: Graph::default(),
-            //is_pressed: false,
-            //last_graph_cursor_position: Point::default(),
+            left_clicked_time_2: None,            
+            graph: Graph::default(),            
             modal: None,
-            nodebar: Nodebar::default(),
-            //nodes: HashMap::new(),
-            theme: crate::ui::theme::Theme::ORANGE,
-            //theme: crate::ui::canvas::themes::Themes::cyberpunk(),
+            nodebar: Nodebar::default(),            
+            theme: crate::ui::theme::Theme::ORANGE,            
         }
     }
 }
@@ -257,7 +223,7 @@ impl AppState {
                     self.counter_body += 1;
                     format!("body{}", self.counter_body)
                 }
-                DummyComponent::Revolute(joint) => {
+                DummyComponent::Revolute(_) => {
                     self.counter_revolute += 1;
                     format!("revolute{}", self.counter_revolute)
                 }
@@ -545,8 +511,7 @@ fn loaded_view(state: &AppState) -> Element<Message, crate::ui::theme::Theme> {
             match dummy {
                 DummyComponent::Base(base) => Some(create_base_modal(base)),
                 DummyComponent::Body(body) => Some(create_body_modal(body)),
-                DummyComponent::Revolute(joint) => Some(create_revolute_modal(joint)),
-                _ => None,
+                DummyComponent::Revolute(joint) => Some(create_revolute_modal(joint)),                
             }
             } else {
                 None
@@ -554,8 +519,6 @@ fn loaded_view(state: &AppState) -> Element<Message, crate::ui::theme::Theme> {
         } else {
             None
         };
-    
-    
 
     modal(underlay, overlay)
         .on_esc(Message::CloseModal)
@@ -563,7 +526,7 @@ fn loaded_view(state: &AppState) -> Element<Message, crate::ui::theme::Theme> {
         .into()
 }
 
-fn create_base_modal(base: &DummyBase) -> Element<'static, Message, crate::ui::theme::Theme> {
+fn create_base_modal(_base: &DummyBase) -> Element<'static, Message, crate::ui::theme::Theme> {
     let content = Column::new();
     let footer = Row::new()
         .spacing(10)

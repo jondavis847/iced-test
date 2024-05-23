@@ -37,7 +37,7 @@ impl MultibodyTrait for Revolute {
 
     fn inherit_from(&mut self, dummy: &DummyComponent) {
         match dummy {
-            DummyComponent::Revolute(joint) => {                
+            DummyComponent::Revolute(_) => {                
             }
             _ => {} // error! must be dummy base
         }

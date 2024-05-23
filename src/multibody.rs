@@ -117,7 +117,7 @@ impl MultibodyTrait for MultibodyComponent {
 impl MultibodyComponent {
     pub fn from_dummy(component_id: Uuid, name_id: Uuid, node_id: Uuid, dummy: &DummyComponent) -> Self {
         match dummy {
-            DummyComponent::Base(component) => MultibodyComponent::Base(Base::new(component_id,dummy.get_id(),name_id,node_id)),
+            DummyComponent::Base(_) => MultibodyComponent::Base(Base::new(component_id,dummy.get_id(),name_id,node_id)),
             DummyComponent::Body(component) => MultibodyComponent::Body(Body::from_dummy(component_id,name_id,node_id,component)),
             DummyComponent::Revolute(component) => MultibodyComponent::Joint(Joint::Revolute(Revolute::from_dummy(component_id,name_id,node_id,component))),
         }

@@ -1,4 +1,4 @@
-use crate::ui::dummies::{DummyBody, DummyTrait};
+use crate::ui::dummies::{DummyBody, DummyComponent, DummyTrait};
 
 use super::{MultibodyMeta, MultibodyTrait};
 use uuid::Uuid;
@@ -20,7 +20,7 @@ pub struct Body {
 
 impl Body {
     pub fn from_dummy(component_id: Uuid, node_id: Uuid, name_id: Uuid, dummy: &DummyBody) -> Self {
-        let meta = MultibodyMeta::new(component_id, dummy.get_id(),name_id, node_id);
+        let meta = MultibodyMeta::new(component_id, dummy.get_id(), name_id, node_id);
         Self {
             meta,
             mass: dummy.mass.parse().unwrap_or(1.0),
@@ -41,25 +41,46 @@ impl MultibodyTrait for Body {
     fn get_component_id(&self) -> &Uuid {
         &self.meta.component_id
     }
-    fn set_component_id(&mut self, id: &Uuid) {
-        self.meta.component_id = *id;
-    }
 
     fn get_dummy_id(&self) -> &Uuid {
         &self.meta.dummy_id
     }
 
+    fn get_name_id(&self) -> Uuid {
+        self.meta.name_id
+    }
+
     fn get_node_id(&self) -> &Uuid {
         &self.meta.node_id
     }
-    fn set_node_id(&mut self, id: &Uuid) {
-        self.meta.node_id = *id;
+
+    fn inherit_from(&mut self, dummy: &DummyComponent) {
+        match dummy {
+            DummyComponent::Body(body) => {
+                self.mass = body.mass.parse().unwrap_or(1.0);
+                self.cmx = body.cmx.parse().unwrap_or(0.0);
+                self.cmy = body.cmy.parse().unwrap_or(0.0);
+                self.cmz = body.cmz.parse().unwrap_or(0.0);
+                self.ixx = body.ixx.parse().unwrap_or(1.0);
+                self.iyy = body.iyy.parse().unwrap_or(1.0);
+                self.izz = body.izz.parse().unwrap_or(1.0);
+                self.ixy = body.ixy.parse().unwrap_or(0.0);
+                self.ixz = body.ixz.parse().unwrap_or(0.0);
+                self.iyz = body.iyz.parse().unwrap_or(0.0);
+            }
+            _ => {} //error! must be a body
+        }
     }
 
-    fn get_name_id(&self) -> &Uuid {
-        &self.meta.name_id
+    fn set_component_id(&mut self, id: &Uuid) {
+        self.meta.component_id = *id;
     }
+
     fn set_name_id(&mut self, id: &Uuid) {
         self.meta.name_id = *id;
+    }
+
+    fn set_node_id(&mut self, id: &Uuid) {
+        self.meta.node_id = *id;
     }
 }

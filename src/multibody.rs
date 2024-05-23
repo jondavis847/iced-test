@@ -31,12 +31,13 @@ impl MultibodyMeta {
 
 pub trait MultibodyTrait {
     fn get_component_id(&self) -> &Uuid;
-    fn set_component_id(&mut self, id: &Uuid);    
     fn get_dummy_id(&self) -> &Uuid;
+    fn get_name_id(&self) -> Uuid;
     fn get_node_id(&self) -> &Uuid;
-    fn set_node_id(&mut self, node_id: &Uuid);
-    fn get_name_id(&self) -> &Uuid;
+    fn inherit_from(&mut self, dummy: &DummyComponent);
+    fn set_component_id(&mut self, id: &Uuid);    
     fn set_name_id(&mut self, name_id: &Uuid);    
+    fn set_node_id(&mut self, node_id: &Uuid);
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -53,20 +54,21 @@ impl MultibodyTrait for MultibodyComponent {
             MultibodyComponent::Body(body) => body.get_component_id(),
             MultibodyComponent::Joint(joint) => joint.get_component_id(),
         }
-    }
-    fn set_component_id(&mut self, id: &Uuid) {
-        match self {
-            MultibodyComponent::Base(base) => base.set_component_id(id),
-            MultibodyComponent::Body(body) => body.set_component_id(id),
-            MultibodyComponent::Joint(joint) => joint.set_component_id(id),
-        }
-    }
+    }    
 
     fn get_dummy_id(&self) -> &Uuid {
         match self {
             MultibodyComponent::Base(base) => base.get_dummy_id(),
             MultibodyComponent::Body(body) => body.get_dummy_id(),
             MultibodyComponent::Joint(joint) => joint.get_dummy_id(),
+        }
+    }
+
+    fn get_name_id(&self) -> Uuid {
+        match self {
+            MultibodyComponent::Base(base) => base.get_name_id(),
+            MultibodyComponent::Body(body) => body.get_name_id(),
+            MultibodyComponent::Joint(joint) => joint.get_name_id(),
         }
     }
 
@@ -77,21 +79,23 @@ impl MultibodyTrait for MultibodyComponent {
             MultibodyComponent::Joint(joint) => joint.get_node_id(),
         }
     }
-    fn set_node_id(&mut self, id: &Uuid) {
+
+    fn inherit_from(&mut self, dummy: &DummyComponent) {
         match self {
-            MultibodyComponent::Base(base) => base.set_node_id(id),
-            MultibodyComponent::Body(body) => body.set_node_id(id),
-            MultibodyComponent::Joint(joint) => joint.set_node_id(id),
+            MultibodyComponent::Base(base) => base.inherit_from(dummy),
+            MultibodyComponent::Body(body) => body.inherit_from(dummy),
+            MultibodyComponent::Joint(joint) => joint.inherit_from(dummy),
         }
     }
 
-    fn get_name_id(&self) -> &Uuid {
+    fn set_component_id(&mut self, id: &Uuid) {
         match self {
-            MultibodyComponent::Base(base) => base.get_name_id(),
-            MultibodyComponent::Body(body) => body.get_name_id(),
-            MultibodyComponent::Joint(joint) => joint.get_name_id(),
+            MultibodyComponent::Base(base) => base.set_component_id(id),
+            MultibodyComponent::Body(body) => body.set_component_id(id),
+            MultibodyComponent::Joint(joint) => joint.set_component_id(id),
         }
     }
+
     fn set_name_id(&mut self, id: &Uuid) {
         match self {
             MultibodyComponent::Base(base) => base.set_name_id(id),
@@ -99,6 +103,15 @@ impl MultibodyTrait for MultibodyComponent {
             MultibodyComponent::Joint(joint) => joint.set_name_id(id),
         }
     }
+
+    fn set_node_id(&mut self, id: &Uuid) {
+        match self {
+            MultibodyComponent::Base(base) => base.set_node_id(id),
+            MultibodyComponent::Body(body) => body.set_node_id(id),
+            MultibodyComponent::Joint(joint) => joint.set_node_id(id),
+        }
+    }
+    
 }
 
 impl MultibodyComponent {

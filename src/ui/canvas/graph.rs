@@ -143,6 +143,23 @@ impl Graph {
         }
     }
 
+    pub fn edit_component(&mut self, dummy: &DummyComponent, component_id: &Uuid) {        
+        let name_id = {
+            if let Some(component) = self.components.get(component_id) {
+                component.get_name_id() 
+            } else {
+                // If the component does not exist, return early
+                return;
+            }
+        };    
+        
+        // set the name here since name exists in self.name rather than the component
+        self.set_name(&name_id, dummy.get_name());            
+        if let Some(component) = self.components.get_mut(component_id) {
+            component.inherit_from(dummy);
+        }
+    }
+
     /// Finds a node within snapping distance of the cursor on the graph, if any.
     ///
     /// # Arguments
@@ -208,27 +225,26 @@ impl Graph {
 
     pub fn left_button_pressed(&mut self, cursor: Cursor) {
         self.left_clicked_node = None;
-    
+
         if let Some(cursor_position) = cursor.position_in(self.bounds) {
             self.last_cursor_position = Some(cursor_position);
-            
+
             // Clear the nodes' selected flags and determine the clicked node
             for (id, graphnode) in &mut self.nodes {
                 let node = &mut graphnode.node;
                 node.is_selected = false;
                 node.is_clicked(cursor_position, &MouseButton::Left);
-    
+
                 if node.is_left_clicked {
                     node.is_selected = true;
                     self.left_clicked_node = Some(*id);
                 }
             }
         }
-    
+
         // Update selected_node based on whether a node was clicked
         self.selected_node = self.left_clicked_node;
     }
-    
 
     pub fn left_button_released(
         &mut self,
@@ -253,7 +269,7 @@ impl Graph {
                 match release_event {
                     MouseButtonReleaseEvents::DoubleClick => {
                         clicked_node.is_selected = true;
-                        message = Some(GraphMessage::EditComponent(clicked_node_id));
+                        message = Some(GraphMessage::EditComponent(graphnode.component_id));
                     }
                     MouseButtonReleaseEvents::SingleClick => {
                         clicked_node.is_selected = true;
@@ -277,7 +293,7 @@ impl Graph {
 
     pub fn right_button_pressed(&mut self, cursor: Cursor) {
         self.right_clicked_node = None;
-    
+
         if let Some(cursor_position) = cursor.position_in(self.bounds) {
             for (id, graphnode) in &mut self.nodes {
                 let node = &mut graphnode.node;
@@ -369,6 +385,10 @@ impl Graph {
             self.components.insert(component_id, new_component);
             self.nodes.insert(node_id, graph_node);
         }
+    }
+
+    fn set_name(&mut self,name_id: &Uuid, name: &str) {        
+        self.names.insert(*name_id,name.to_string());
     }
 
     pub fn window_resized(&mut self, size: Size) {

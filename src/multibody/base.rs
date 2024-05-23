@@ -1,5 +1,5 @@
 use super::{MultibodyMeta, MultibodyTrait};
-use crate::ui::dummies::DummyBase;
+use crate::ui::dummies::{DummyBase, DummyComponent, DummyTrait};
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Copy)]
@@ -18,23 +18,37 @@ impl MultibodyTrait for Base {
     fn get_component_id(&self) -> &Uuid {
         &self.meta.component_id
     }
-    fn set_component_id(&mut self, id: &Uuid) {
-        self.meta.component_id = *id;
-    }
+    
     fn get_dummy_id(&self) -> &Uuid {
         &self.meta.dummy_id
     }
-    fn get_node_id(&self) -> &Uuid {
-        &self.meta.node_id
-    }
-    fn set_node_id(&mut self, id: &Uuid) {
-        self.meta.node_id = *id;
+
+    fn get_name_id(&self) -> Uuid {
+        self.meta.name_id
     }
 
-    fn get_name_id(&self) -> &Uuid {
-        &self.meta.name_id
+    fn get_node_id(&self) -> &Uuid {
+           &self.meta.node_id
     }
+
+    fn inherit_from(&mut self, dummy: &DummyComponent) {
+        match dummy {
+            DummyComponent::Base(base) => {                
+            }
+            _ => {} // error! must be dummy base
+        }
+    }
+
+    fn set_component_id(&mut self, id: &Uuid) {
+        self.meta.component_id = *id;
+    }
+
     fn set_name_id(&mut self, id: &Uuid) {
         self.meta.name_id = *id;
     }
+
+    fn set_node_id(&mut self, id: &Uuid) {
+        self.meta.node_id = *id;
+    }
+    
 }

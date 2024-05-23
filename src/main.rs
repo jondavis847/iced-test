@@ -155,6 +155,16 @@ impl AppState {
         }
     }
 
+    pub fn delete_pressed(&mut self) {
+        self.graph.delete_pressed();
+        //self.nodebar.delete_pressed(); // no need for this, maybe ever?
+        self.cache.clear();
+    }
+
+    pub fn enter_pressed(&mut self) {
+        self.save_component()
+    }
+
     pub fn left_button_pressed(&mut self, cursor: Cursor) {
         self.left_clicked_time_1 = self.left_clicked_time_2;
         self.left_clicked_time_2 = Some(Instant::now());
@@ -188,35 +198,26 @@ impl AppState {
             }
             _ => MouseButtonReleaseEvents::Nothing,
         };
-        if let Some(bar_message) = self.nodebar.left_button_released(&release_event) {
-            match bar_message {
-                NodebarMessage::NewComponent(id) => {                        
-                    if let Some(component) = self.nodebar.components.get(&id) {
-                        let active_modal = ActiveModal::new(id, None);
-                        self.modal = Some(active_modal);
-                    }
+        println!("{:?}", release_event);
+        if let Some(NodebarMessage::NewComponent(id)) = self.nodebar.left_button_released(&release_event) {
+            // Only create a new component if the mouse is over the graph
+            if cursor.is_over(self.graph.bounds) {
+                if self.nodebar.components.contains_key(&id) {
+                    self.modal = Some(ActiveModal::new(id, None));
                 }
             }
         }
-        if let Some(graph_message) = self.graph.left_button_released(&release_event, cursor) {
-            match graph_message {
-                GraphMessage::EditComponent(id) => {                    
-                    if let Some(component) = self.graph.components.get(&id) {
-                        let active_modal = ActiveModal::new(*component.get_dummy_id(), Some(id));
-
-                        if let Some(dummy) = self
-                            .nodebar
-                            .components
-                            .get_mut(&active_modal.dummy_component_id) {
-                
-                            if let Some(component_id) = active_modal.graph_component_id {
-                                //editing an existing component, populate values
-                                dummy.inherit_from(&component_id, &self.graph);
-                            }
-
-                            self.modal = Some(active_modal);
-                        }
+        if let Some(GraphMessage::EditComponent(id)) = self.graph.left_button_released(&release_event, cursor) {            
+            if let Some(component) = self.graph.components.get(&id) {                
+                let active_modal = ActiveModal::new(*component.get_dummy_id(), Some(id));                
+        
+                if let Some(dummy) = self.nodebar.components.get_mut(&active_modal.dummy_component_id) {                    
+                    if let Some(component_id) = active_modal.graph_component_id {
+                        // Editing an existing component, populate values
+                        dummy.inherit_from(&component_id, &self.graph);                        
                     }
+        
+                    self.modal = Some(active_modal);
                 }
             }
         }
@@ -233,16 +234,6 @@ impl AppState {
         self.graph.right_button_released(cursor);
         self.nodebar.right_button_released(cursor);
         self.cache.clear();
-    }
-
-    pub fn delete_pressed(&mut self) {
-        self.graph.delete_pressed();
-        //self.nodebar.delete_pressed(); // no need for this, maybe ever?
-        self.cache.clear();
-    }
-
-    pub fn enter_pressed(&mut self) {
-        self.save_component()
     }
 
     pub fn save_component(&mut self) {
@@ -273,9 +264,14 @@ impl AppState {
             };
             dummy_component.set_name(&name);
         }
-        self.graph.save_component(&dummy_component);
+        match modal.graph_component_id {
+            Some(id) => self.graph.edit_component(&dummy_component,&id),
+            None => self.graph.save_component(&dummy_component),
+        }
+        
 
         // Clear the modal and cache
+        dummy_component.clear();
         self.modal = None;
         self.cache.clear();
     }
@@ -420,6 +416,11 @@ impl AppState {
             window_size.height,
         );
         self.graph.window_resized(graph_size);
+        let nodebar_size = Size::new(
+            self.nodebar.bounds.width,
+            window_size.height,
+        );
+        self.nodebar.window_resized(nodebar_size);
     }
 }
 

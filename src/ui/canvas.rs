@@ -125,7 +125,7 @@ impl<'a> canvas::Program<Message, Theme> for GraphCanvas<'a> {
                             self.app_state.graph.components.get(&graphnode.component_id)
                         {
                             if let Some(label) =
-                                self.app_state.graph.names.get(component.get_name_id())
+                                self.app_state.graph.names.get(&component.get_name_id())
                             {
                                 graphnode.node.draw(frame, &self.app_state.theme, label)
                             }

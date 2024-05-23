@@ -12,6 +12,7 @@ pub enum DummyComponent {
 }
 
 pub trait DummyTrait {
+    fn clear(&mut self);
     fn get_id(&self) -> Uuid;
     fn get_name(&self) -> &str;
     fn inherit_from(&mut self, component_id: &Uuid, graph: &Graph); // these args suck, but has to be this way sicne names is stored separately in graph for performance
@@ -19,8 +20,16 @@ pub trait DummyTrait {
 }
 
 impl DummyTrait for DummyComponent {
+    fn clear(&mut self) {
+        match self {            
+            DummyComponent::Base(component) => component.clear(),
+            DummyComponent::Body(component) => component.clear(),
+            DummyComponent::Revolute(component) => component.clear(),
+        }
+    }
+
     fn get_id(&self) -> Uuid {
-        match self {
+        match self {            
             DummyComponent::Base(component) => component.get_id(),
             DummyComponent::Body(component) => component.get_id(),
             DummyComponent::Revolute(component) => component.get_id(),
@@ -65,12 +74,13 @@ impl DummyBase {
             ..Default::default()
         }
     }
-    pub fn clear(&mut self) {
-        self.name = String::new();
-    }
 }
 
 impl DummyTrait for DummyBase {
+    fn clear(&mut self) {
+        self.name = String::new();
+    }
+
     fn get_id(&self) -> Uuid {
         self.id
     }
@@ -83,7 +93,7 @@ impl DummyTrait for DummyBase {
         if let Some(component) = graph.components.get(component_id) {
             match component {
                 MultibodyComponent::Base(base) => {
-                    if let Some(name) = graph.names.get(component.get_name_id()) {
+                    if let Some(name) = graph.names.get(&component.get_name_id()) {
                         self.set_name(name);
                     }
 
@@ -115,7 +125,16 @@ pub struct DummyBody {
 }
 
 impl DummyBody {
-    pub fn clear(&mut self) {
+    pub fn new(id: Uuid) -> Self {
+        Self {
+            id: id,
+            ..Default::default()
+        }
+    }
+}
+
+impl DummyTrait for DummyBody {
+    fn clear(&mut self) {
         self.name = String::new();
         self.mass = String::new();
         self.cmx = String::new();
@@ -129,15 +148,6 @@ impl DummyBody {
         self.iyz = String::new();
     }
 
-    pub fn new(id: Uuid) -> Self {
-        Self {
-            id: id,
-            ..Default::default()
-        }
-    }
-}
-
-impl DummyTrait for DummyBody {
     fn get_id(&self) -> Uuid {
         self.id
     }
@@ -150,7 +160,7 @@ impl DummyTrait for DummyBody {
         if let Some(component) = graph.components.get(component_id) {
             match component {
                 MultibodyComponent::Body(body) => {
-                    if let Some(name) = graph.names.get(component.get_name_id()) {
+                    if let Some(name) = graph.names.get(&component.get_name_id()) {
                         self.set_name(name);
                     }
                     self.mass = body.mass.to_string();
@@ -181,10 +191,6 @@ pub struct DummyRevolute {
 }
 
 impl DummyRevolute {
-    pub fn clear(&mut self) {
-        self.name = String::new();
-    }
-
     pub fn new(id: Uuid) -> Self {
         Self {
             id: id,
@@ -194,6 +200,10 @@ impl DummyRevolute {
 }
 
 impl DummyTrait for DummyRevolute {
+    fn clear(&mut self) {
+        self.name = String::new();
+    }
+
     fn get_id(&self) -> Uuid {
         self.id
     }
@@ -206,8 +216,8 @@ impl DummyTrait for DummyRevolute {
         if let Some(component) = graph.components.get(component_id) {
             match component {
                 MultibodyComponent::Joint(joint) => match joint {
-                    Joint::Revolute(revolute) => {
-                        if let Some(name) = graph.names.get(component.get_name_id()) {
+                    Joint::Revolute(_) => {
+                        if let Some(name) = graph.names.get(&component.get_name_id()) {
                             self.set_name(name);
                         }                        
                     }

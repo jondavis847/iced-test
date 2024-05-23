@@ -173,8 +173,12 @@ impl Nodebar {
                 let clicked_node = &mut nodebarnode.node;
                 match release_event {
                     MouseButtonReleaseEvents::DoubleClick => {}
-                    MouseButtonReleaseEvents::SingleClick => {
-                        clicked_node.is_selected = true;
+                    MouseButtonReleaseEvents::SingleClick => {                        
+                        // SingleClick is < 200 ms, which you can move and drop fast enough technically
+                        if self.components.contains_key(&nodebarnode.component_id) {
+                            message = Some(NodebarMessage::NewComponent(nodebarnode.component_id));
+                        }
+                        nodebarnode.go_home();
                     }
                     MouseButtonReleaseEvents::Held => {
                         if self.components.contains_key(&nodebarnode.component_id) {
@@ -201,6 +205,11 @@ impl Nodebar {
 
     pub fn right_button_released(&mut self, _cursor: Cursor) {
         //placeholder
+    }
+
+    pub fn window_resized(&mut self, size: Size) {
+        self.bounds.height = size.height;
+        self.bounds.width = size.width;
     }
 }
 

@@ -172,8 +172,7 @@ impl AppState {
                 }
             }
             _ => MouseButtonReleaseEvents::Nothing,
-        };
-        println!("{:?}", release_event);
+        };        
         if let Some(NodebarMessage::NewComponent(id)) = self.nodebar.left_button_released(&release_event) {
             // Only create a new component if the mouse is over the graph
             if cursor.is_over(self.graph.bounds) {

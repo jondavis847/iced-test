@@ -4,6 +4,8 @@ use uuid::Uuid;
 use std::collections::HashMap;
 use crate::ui::canvas::graph::GraphNode;
 use crate::ui::theme::Theme;
+use lyon_geom::{euclid::default::Point2D, CubicBezierSegment, Line, LineSegment, QuadraticBezierSegment};
+use lyon_path::PathEvent;
 
 #[derive(Debug, Clone)]
 pub enum EdgeConnection {
@@ -34,7 +36,12 @@ impl Edge {
         };
         
         let to_point = match self.to {
-            EdgeConnection::Node(id) => nodes.get(&id).unwrap().node.bounds.center(),
+            EdgeConnection::Node(id) => {
+                let graphnode = nodes.get(&id).unwrap();
+                let node_path = graphnode.node.calculate_path();
+
+                find_intersection(from_point,graphnode.node.bounds.center(), &node_path)
+            }
             EdgeConnection::Point(point) => point,
         };
 
@@ -62,7 +69,7 @@ impl Edge {
         let unit_direction = Point::new(direction.x / length, direction.y / length);
 
         // Define the arrowhead size
-        let arrowhead_length = 100.0;
+        let arrowhead_length = 10.0;
         let arrowhead_width = 5.0;
 
         // Calculate the points of the arrowhead
@@ -88,4 +95,90 @@ impl Edge {
             theme.primary,
         );
     }
+}
+
+fn find_intersection(from: Point, to: Point, path: &Path) -> Point {
+    let lyon_path = path.raw();
+
+    for event in lyon_path.iter() {
+        match event {
+            PathEvent::Line { from: start, to: end } => {
+                if let Some(intersection) = line_line_intersection(from, to, start, end) {
+                    return intersection;
+                }
+            }
+            PathEvent::Quadratic { from: start, ctrl, to: end } => {
+                if let Some(intersection) = line_quadratic_intersection(from, to, start, ctrl, end) {
+                    return intersection;
+                }
+            }
+            PathEvent::Cubic { from: start, ctrl1, ctrl2, to: end } => {
+                if let Some(intersection) = line_cubic_intersection(from, to, start, ctrl1, ctrl2, end) {
+                    return intersection;
+                }
+            }
+            _ => {}
+        }
+    }
+
+    to // Default to the 'to' point if no intersection is found
+}
+
+fn line_line_intersection(from: Point, to: Point, start: Point2D<f32>, end: Point2D<f32>) -> Option<Point> {
+    let line1 = LineSegment {
+        from: Point2D::new(from.x, from.y),
+        to: Point2D::new(to.x, to.y),
+    };
+
+    let line2 = LineSegment {
+        from: start,
+        to: end,
+    };
+
+    if let Some(intersection) = line1.intersection(&line2) {
+        Some(Point::new(intersection.x, intersection.y))
+    } else {
+        None
+    }
+}
+
+fn line_quadratic_intersection(from: Point, to: Point, start: Point2D<f32>, ctrl: Point2D<f32>, end: Point2D<f32>) -> Option<Point> {
+    let line = Line {
+        point: Point2D::new(from.x, from.y),
+        vector: Point2D::new(to.x - from.x, to.y - from.y).to_vector(),
+    };
+
+    let curve = QuadraticBezierSegment {
+        from: start,
+        ctrl,
+        to: end,
+    };
+
+    for t in curve.line_intersections_t(&line) {
+        let intersection = curve.sample(t);
+        return Some(Point::new(intersection.x, intersection.y));
+    }
+
+    None
+}
+
+fn line_cubic_intersection(from: Point, to: Point, start: Point2D<f32>, ctrl1: Point2D<f32>, ctrl2: Point2D<f32>, end: Point2D<f32>) -> Option<Point> {
+    let line = Line {
+        point: Point2D::new(from.x, from.y),
+        vector: Point2D::new(to.x - from.x, to.y - from.y).to_vector(),
+    };
+
+    let curve = CubicBezierSegment {
+        from: start,
+        ctrl1,
+        ctrl2,
+        to: end,
+    };
+
+    for t in curve.line_intersections_t(&line) {
+        let intersection = curve.sample(t);
+        return Some(Point::new(intersection.x, intersection.y));
+    }
+
+    None
 }

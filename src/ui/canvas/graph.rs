@@ -378,8 +378,7 @@ impl Graph {
         }
     
         self.current_edge = None;
-        self.right_clicked_node = None;
-        println!("{:?}", self.components);
+        self.right_clicked_node = None;        
     }
     
 

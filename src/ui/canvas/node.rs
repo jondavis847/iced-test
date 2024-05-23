@@ -19,7 +19,8 @@ pub struct Node {
     //pub label: String,
 }
 
-impl Node {
+impl Node {    
+
     pub fn new(
         bounds: Rectangle,        
         //label: String,        
@@ -34,7 +35,7 @@ impl Node {
         }
     }
 
-    fn draw_node_path(&self) -> Path {
+    pub fn calculate_path(&self) -> Path {
         let bounds = self.bounds;
         let corner_radius = 3.0;
 
@@ -82,7 +83,7 @@ impl Node {
     }
 
     pub fn draw(&self, frame: &mut Frame, theme: &Theme, label: &str) {
-        let background = self.draw_node_path();
+        let background = self.calculate_path();
 
         let node_border_color;
         if self.is_selected {

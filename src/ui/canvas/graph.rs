@@ -78,7 +78,7 @@ impl Graph {
                     redraw = true;
                 }
             }
-        } else if self.is_clicked {
+        } else if self.is_clicked {            
             // Handle graph translating
             if let Some(graph_cursor_position) = cursor_position {
                 if let Some(last_position) = self.last_cursor_position {
@@ -229,6 +229,7 @@ impl Graph {
         self.left_clicked_node = None;
 
         if let Some(cursor_position) = cursor.position_in(self.bounds) {
+            self.is_clicked = true;
             self.last_cursor_position = Some(cursor_position);
 
             // Clear the nodes' selected flags and determine the clicked node

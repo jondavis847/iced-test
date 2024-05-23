@@ -4,7 +4,7 @@ use uuid::Uuid;
 
 use super::edge::{Edge, EdgeConnection};
 use super::node::Node;
-use crate::multibody::{joints::Joint, MultibodyComponent, MultibodyTrait};
+use crate::multibody::{joints::{Joint, JointTrait}, MultibodyComponent, MultibodyTrait};
 use crate::ui::dummies::{DummyComponent, DummyTrait};
 use crate::{MouseButton, MouseButtonReleaseEvents};
 
@@ -113,6 +113,7 @@ impl Graph {
                     // Add the edge to the from node
                     if let Some(from_node) = self.nodes.get_mut(&clicked_node_id) {
                         from_node.edges.push(new_edge_id);
+
                     }
                 }
                 redraw = true;
@@ -311,52 +312,76 @@ impl Graph {
 
     pub fn right_button_released(&mut self, cursor: Cursor) {
         if let Some(edge_id) = self.current_edge {
-            if let Some(snappable_node_id) = self.get_snappable_node(cursor) {
-                let to_node_modal = self
-                    .nodes
-                    .get(&snappable_node_id)
-                    .map(|node| node.component_id);
-
-                if let Some(to_node_modal) = to_node_modal {
-                    let valid_connection = {
-                        if let Some(active_edge) = self.edges.get(&edge_id) {
-                            match active_edge.from {
-                                EdgeConnection::Node(node_id) => {
-                                    self.nodes.get(&node_id).map_or(false, |from_node| {
-                                        self.is_valid_connection(
-                                            &from_node.component_id,
-                                            &to_node_modal,
-                                        )
-                                    })
+            let to_node_id = match self.get_snappable_node(cursor) {
+                Some(id) => id,
+                None => {
+                    self.edges.remove(&edge_id);
+                    self.current_edge = None;
+                    self.right_clicked_node = None;
+                    return;
+                }
+            };
+    
+            let to_node_component_id = match self.nodes.get(&to_node_id).map(|node| node.component_id) {
+                Some(id) => id,
+                None => {
+                    self.edges.remove(&edge_id);
+                    self.current_edge = None;
+                    self.right_clicked_node = None;
+                    return;
+                }
+            };
+    
+            let valid_connection = match self.edges.get(&edge_id) {
+                Some(active_edge) => match active_edge.from {
+                    EdgeConnection::Node(from_node_id) => self.nodes.get(&from_node_id).map_or(false, |from_node| {
+                        self.is_valid_connection(&from_node.component_id, &to_node_component_id)
+                    }),
+                    EdgeConnection::Point(_) => false,
+                },
+                None => false,
+            };
+    
+            if valid_connection {
+                if let Some(active_edge) = self.edges.get_mut(&edge_id) {
+                    if let EdgeConnection::Node(from_node_id) = active_edge.from {
+                        if let Some(to_node) = self.nodes.get_mut(&to_node_id) {
+                            to_node.edges.push(edge_id);
+                            active_edge.to = EdgeConnection::Node(to_node_id);
+    
+                            // Connect the components
+                            if let Some(from_node) = self.nodes.get(&from_node_id) {
+                                if let Some(from_component) = self.components.get_mut(&from_node.component_id) {
+                                    match from_component {
+                                        MultibodyComponent::Joint(joint) => joint.connect_from(to_node_id),
+                                        _ => {}
+                                        // Add other component types if necessary
+                                    }
                                 }
-                                EdgeConnection::Point(_) => false,
                             }
-                        } else {
-                            false
-                        }
-                    };
-
-                    if valid_connection {
-                        if let Some(active_edge) = self.edges.get_mut(&edge_id) {
-                            if let EdgeConnection::Node(_) = active_edge.from {
-                                if let Some(to_node) = self.nodes.get_mut(&snappable_node_id) {
-                                    to_node.edges.push(edge_id);
-                                    active_edge.to = EdgeConnection::Node(snappable_node_id);
+    
+                            if let Some(to_node) = self.nodes.get(&to_node_id) {
+                                if let Some(to_component) = self.components.get_mut(&to_node.component_id) {
+                                    match to_component {
+                                        MultibodyComponent::Joint(joint) => joint.connect_to(from_node_id),
+                                        _ => {}
+                                        // Add other component types if necessary
+                                    }
                                 }
                             }
                         }
-                    } else {
-                        self.edges.remove(&edge_id);
                     }
                 }
             } else {
                 self.edges.remove(&edge_id);
             }
         }
-
+    
         self.current_edge = None;
         self.right_clicked_node = None;
+        println!("{:?}", self.components);
     }
+    
 
     pub fn save_component(&mut self, dummy: &DummyComponent) {
         // only do this if we can save the node

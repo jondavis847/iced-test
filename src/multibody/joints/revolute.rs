@@ -1,4 +1,4 @@
-use crate::multibody::{connection::JointConnection, MultibodyMeta, MultibodyTrait};
+use crate::multibody::{connection::JointConnection, joints::JointTrait,  MultibodyMeta, MultibodyTrait};
 use uuid::Uuid;
 use crate::ui::dummies::{DummyComponent,DummyRevolute, DummyTrait};
 
@@ -15,6 +15,22 @@ impl Revolute {
             meta: meta,
             connection: JointConnection::default(),
         }
+    }
+}
+
+impl JointTrait for Revolute {
+    fn connect_from(&mut self, from_id: Uuid) {
+        self.connection.inner_body = Some(from_id);
+    }
+    fn connect_to(&mut self, to_id: Uuid) {
+        self.connection.outer_body = Some(to_id);
+    }
+
+    fn delete_from(&mut self) {
+        self.connection.inner_body = None;
+    }
+    fn delete_to(&mut self) {
+        self.connection.outer_body = None;
     }
 }
 

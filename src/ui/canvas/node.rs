@@ -15,7 +15,7 @@ pub struct Node {
     pub is_left_clicked: bool,
     pub is_middle_clicked: bool,
     pub is_right_clicked: bool,
-    pub is_selected: bool,
+    pub is_selected: bool,    
     //pub label: String,
 }
 
@@ -132,7 +132,7 @@ impl Node {
             crate::MouseButton::Left => self.is_left_clicked = is_inside,
             crate::MouseButton::Right => self.is_right_clicked = is_inside,
             crate::MouseButton::Middle => self.is_middle_clicked = is_inside,
-        }
+        }       
     }    
 }
 

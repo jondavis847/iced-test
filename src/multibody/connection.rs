@@ -2,8 +2,8 @@ use uuid::Uuid;
 
 #[derive(Debug, Clone, Copy)]
 pub struct JointConnection {
-    inner_body: Option<Uuid>,
-    outer_body: Option<Uuid>,    
+    pub inner_body: Option<Uuid>,
+    pub outer_body: Option<Uuid>,    
 }
 impl Default for JointConnection {
     fn default() -> Self {

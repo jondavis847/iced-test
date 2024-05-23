@@ -5,6 +5,13 @@ pub mod revolute;
 use revolute::Revolute;
 use crate::ui::dummies::DummyComponent;
 
+pub trait JointTrait {
+    fn connect_from(&mut self, from_id: Uuid);
+    fn connect_to(&mut self, to_id: Uuid);
+    fn delete_from(&mut self);
+    fn delete_to(&mut self);
+}
+
 #[derive(Debug, Clone, Copy)]
 pub enum Joint {
     //Floating,
@@ -13,7 +20,34 @@ pub enum Joint {
     //Spherical,
 }
 
-impl MultibodyTrait for Joint {
+impl JointTrait for Joint {
+    fn connect_from(&mut self, from_id: Uuid) {
+        match self {
+            Joint::Revolute(joint) => joint.connect_from(from_id)
+        }
+    }
+    fn connect_to(&mut self, to_id: Uuid) {
+        match self {
+            Joint::Revolute(joint) => joint.connect_to(to_id)
+        }
+    }
+
+    fn delete_from(&mut self) {
+        match self {
+            Joint::Revolute(joint) => joint.delete_from()
+        }
+    }
+
+    fn delete_to(&mut self) {
+        match self {
+            Joint::Revolute(joint) => joint.delete_to()
+        }
+    }
+    
+}
+
+impl MultibodyTrait for Joint {    
+
     fn get_component_id(&self) -> &Uuid {
         match self {
             Joint::Revolute(revolute) => revolute.get_component_id(),

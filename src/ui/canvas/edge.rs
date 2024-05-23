@@ -55,5 +55,37 @@ impl Edge {
                 },
             );
         });
+
+        // Calculate the direction vector
+        let direction = Point::new(to_point.x - from_point.x, to_point.y - from_point.y);
+        let length = (direction.x.powi(2) + direction.y.powi(2)).sqrt();
+        let unit_direction = Point::new(direction.x / length, direction.y / length);
+
+        // Define the arrowhead size
+        let arrowhead_length = 100.0;
+        let arrowhead_width = 5.0;
+
+        // Calculate the points of the arrowhead
+        let arrow_point1 = Point::new(
+            to_point.x - arrowhead_length * unit_direction.x + arrowhead_width * unit_direction.y,
+            to_point.y - arrowhead_length * unit_direction.y - arrowhead_width * unit_direction.x,
+        );
+        let arrow_point2 = Point::new(
+            to_point.x - arrowhead_length * unit_direction.x - arrowhead_width * unit_direction.y,
+            to_point.y - arrowhead_length * unit_direction.y + arrowhead_width * unit_direction.x,
+        );
+
+        // Draw the arrowhead
+        let arrow_path = Path::new(|p| {
+            p.move_to(to_point);
+            p.line_to(arrow_point1);
+            p.line_to(arrow_point2);
+            p.close();
+        });
+
+        frame.fill(
+            &arrow_path,
+            theme.primary,
+        );
     }
 }

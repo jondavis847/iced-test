@@ -54,6 +54,7 @@ enum Message {
     CloseModal,
     DeletePressed,
     EnterPressed,
+    TabPressed,
     FontLoaded(Result<(), font::Error>),
     Loaded(Result<(), String>),
     SaveComponent,
@@ -110,8 +111,12 @@ enum MouseButtonReleaseEvents {
 }
 
 impl AppState {
+    pub fn close_modal(&mut self) -> Command<Message> {
+        self.modal = None;
+        Command::none()
+    }
     
-    pub fn cursor_moved(&mut self, cursor: Cursor) {
+    pub fn cursor_moved(&mut self, cursor: Cursor) -> Command<Message> {
         let nodebar_redraw = self.nodebar.cursor_moved(cursor);
         let graph_redraw = self.graph.cursor_moved(cursor);
 
@@ -119,28 +124,32 @@ impl AppState {
         if nodebar_redraw || graph_redraw {
             self.cache.clear();
         }
+        Command::none()
     }
 
-    pub fn delete_pressed(&mut self) {
+    pub fn delete_pressed(&mut self) -> Command<Message> {
         self.graph.delete_pressed();
         //self.nodebar.delete_pressed(); // no need for this, maybe ever?
         self.cache.clear();
+        Command::none()
     }
 
-    pub fn enter_pressed(&mut self) {
-        self.save_component()
+    pub fn enter_pressed(&mut self) -> Command<Message> {
+        self.save_component();
+        Command::none()
     }
 
-    pub fn left_button_pressed(&mut self, cursor: Cursor) {
+    pub fn left_button_pressed(&mut self, cursor: Cursor) -> Command<Message> {
         self.left_clicked_time_1 = self.left_clicked_time_2;
         self.left_clicked_time_2 = Some(Instant::now());
 
         self.nodebar.left_button_pressed(cursor);
         self.graph.left_button_pressed(cursor);        
         self.cache.clear();
+        Command::none()
     }
 
-    pub fn left_button_released(&mut self, cursor: Cursor) {
+    pub fn left_button_released(&mut self, cursor: Cursor) -> Command<Message> {
         // Determine the type of mouse button release event
         let release_event = match (self.left_clicked_time_1, self.left_clicked_time_2) {
             (Some(clicked_time_1), Some(clicked_time_2)) => {
@@ -189,30 +198,33 @@ impl AppState {
         }
         
         self.cache.clear();
+        Command::none()
     }
 
-    pub fn right_button_pressed(&mut self, cursor: Cursor) {
+    pub fn right_button_pressed(&mut self, cursor: Cursor) -> Command<Message> {
         self.nodebar.right_button_pressed(cursor);
-        self.graph.right_button_pressed(cursor);        
+        self.graph.right_button_pressed(cursor);    
+        Command::none()    
     }
 
-    pub fn right_button_released(&mut self, cursor: Cursor) {
+    pub fn right_button_released(&mut self, cursor: Cursor) -> Command<Message> {
         self.graph.right_button_released(cursor);
         self.nodebar.right_button_released(cursor);
         self.cache.clear();
+        Command::none()
     }
 
-    pub fn save_component(&mut self) {
+    pub fn save_component(&mut self) -> Command<Message> {
         // early return
         let modal = match self.modal {
             Some(ref modal) => modal,
-            None => return,
+            None => return Command::none(),
         };
 
         // early return
         let dummy_component = match self.nodebar.components.get_mut(&modal.dummy_component_id) {
             Some(component) => component,
-            None => return,
+            None => return Command::none(),
         };
 
         // Ensure the body has a unique name if it's empty
@@ -240,9 +252,19 @@ impl AppState {
         dummy_component.clear();
         self.modal = None;
         self.cache.clear();
+        Command::none()
     }
 
-    fn update_body_name(&mut self, value: &str) {
+    fn tab_pressed(&mut self) -> Command<Message> {
+        if self.modal.is_some() {
+            Command::none()
+            //iced::widget::focus_next() // not working right now
+        } else {
+            Command::none()
+        }
+    }
+
+    fn update_body_name(&mut self, value: &str) -> Command<Message> {
         if let Some(dummy_component) = self.nodebar.components.get_mut(&self.nodebar.map.body) {
             if let DummyComponent::Body(dummy_body) = dummy_component {
                 dummy_body.set_name(value);
@@ -251,9 +273,10 @@ impl AppState {
                 eprintln!("Error: Component is not a DummyBody");
             }
         }
+        Command::none()
     }
     
-    fn update_body_mass(&mut self, value: &str) {
+    fn update_body_mass(&mut self, value: &str) -> Command<Message> {
         if let Some(dummy_component) = self.nodebar.components.get_mut(&self.nodebar.map.body) {
             if let DummyComponent::Body(dummy_body) = dummy_component {
                 dummy_body.mass = value.to_string();
@@ -262,9 +285,10 @@ impl AppState {
                 eprintln!("Error: Component is not a DummyBody");
             }
         }
+        Command::none()
     }
     
-    fn update_body_cmx(&mut self, value: &str) {
+    fn update_body_cmx(&mut self, value: &str) -> Command<Message> {
         if let Some(dummy_component) = self.nodebar.components.get_mut(&self.nodebar.map.body) {
             if let DummyComponent::Body(dummy_body) = dummy_component {
                 dummy_body.cmx = value.to_string();
@@ -273,9 +297,10 @@ impl AppState {
                 eprintln!("Error: Component is not a DummyBody");
             }
         }
+        Command::none()
     }
     
-    fn update_body_cmy(&mut self, value: &str) {
+    fn update_body_cmy(&mut self, value: &str) -> Command<Message> {
         if let Some(dummy_component) = self.nodebar.components.get_mut(&self.nodebar.map.body) {
             if let DummyComponent::Body(dummy_body) = dummy_component {
                 dummy_body.cmy = value.to_string();
@@ -284,9 +309,10 @@ impl AppState {
                 eprintln!("Error: Component is not a DummyBody");
             }
         }
+        Command::none()
     }
     
-    fn update_body_cmz(&mut self, value: &str) {
+    fn update_body_cmz(&mut self, value: &str) -> Command<Message> {
         if let Some(dummy_component) = self.nodebar.components.get_mut(&self.nodebar.map.body) {
             if let DummyComponent::Body(dummy_body) = dummy_component {
                 dummy_body.cmz = value.to_string();
@@ -295,9 +321,10 @@ impl AppState {
                 eprintln!("Error: Component is not a DummyBody");
             }
         }
+        Command::none()
     }
     
-    fn update_body_ixx(&mut self, value: &str) {
+    fn update_body_ixx(&mut self, value: &str) -> Command<Message> {
         if let Some(dummy_component) = self.nodebar.components.get_mut(&self.nodebar.map.body) {
             if let DummyComponent::Body(dummy_body) = dummy_component {
                 dummy_body.ixx = value.to_string();
@@ -306,9 +333,10 @@ impl AppState {
                 eprintln!("Error: Component is not a DummyBody");
             }
         }
+        Command::none()
     }
     
-    fn update_body_iyy(&mut self, value: &str) {
+    fn update_body_iyy(&mut self, value: &str) -> Command<Message> {
         if let Some(dummy_component) = self.nodebar.components.get_mut(&self.nodebar.map.body) {
             if let DummyComponent::Body(dummy_body) = dummy_component {
                 dummy_body.iyy = value.to_string();
@@ -317,9 +345,10 @@ impl AppState {
                 eprintln!("Error: Component is not a DummyBody");
             }
         }
+        Command::none()
     }
     
-    fn update_body_izz(&mut self, value: &str) {
+    fn update_body_izz(&mut self, value: &str) -> Command<Message> {
         if let Some(dummy_component) = self.nodebar.components.get_mut(&self.nodebar.map.body) {
             if let DummyComponent::Body(dummy_body) = dummy_component {
                 dummy_body.izz = value.to_string();
@@ -328,9 +357,10 @@ impl AppState {
                 eprintln!("Error: Component is not a DummyBody");
             }
         }
+        Command::none()
     }
     
-    fn update_body_ixy(&mut self, value: &str) {
+    fn update_body_ixy(&mut self, value: &str) -> Command<Message> {
         if let Some(dummy_component) = self.nodebar.components.get_mut(&self.nodebar.map.body) {
             if let DummyComponent::Body(dummy_body) = dummy_component {
                 dummy_body.ixy = value.to_string();
@@ -339,9 +369,10 @@ impl AppState {
                 eprintln!("Error: Component is not a DummyBody");
             }
         }
+        Command::none()
     }
     
-    fn update_body_ixz(&mut self, value: &str) {
+    fn update_body_ixz(&mut self, value: &str) -> Command<Message> {
         if let Some(dummy_component) = self.nodebar.components.get_mut(&self.nodebar.map.body) {
             if let DummyComponent::Body(dummy_body) = dummy_component {
                 dummy_body.ixz = value.to_string();
@@ -350,9 +381,10 @@ impl AppState {
                 eprintln!("Error: Component is not a DummyBody");
             }
         }
+        Command::none()
     }
     
-    fn update_body_iyz(&mut self, value: &str) {
+    fn update_body_iyz(&mut self, value: &str) -> Command<Message> {
         if let Some(dummy_component) = self.nodebar.components.get_mut(&self.nodebar.map.body) {
             if let DummyComponent::Body(dummy_body) = dummy_component {
                 dummy_body.iyz = value.to_string();
@@ -361,10 +393,11 @@ impl AppState {
                 eprintln!("Error: Component is not a DummyBody");
             }
         }
+        Command::none()
     }
     
     // Helper function to update the revolute name
-    fn update_revolute_name(&mut self, value: &str) {
+    fn update_revolute_name(&mut self, value: &str) -> Command<Message> {
         if let Some(dummy_component) = self.nodebar.components.get_mut(&self.nodebar.map.revolute) {
             if let DummyComponent::Revolute(dummy_revolute) = dummy_component {
                 dummy_revolute.set_name(value);
@@ -372,11 +405,12 @@ impl AppState {
                 // Handle error: must be the dummy revolute
                 eprintln!("Error: Component is not a DummyRevolute");
             }
-        }    
+        }  
+        Command::none()  
     }
     
 
-    fn window_resized(&mut self, window_size: Size) {
+    fn window_resized(&mut self, window_size: Size) -> Command<Message> {
         let graph_size = Size::new(
             window_size.width - self.nodebar.bounds.width,
             window_size.height,
@@ -387,6 +421,7 @@ impl AppState {
             window_size.height,
         );
         self.nodebar.window_resized(nodebar_size);
+        Command::none()
     }
 }
 
@@ -418,12 +453,13 @@ impl Application for IcedTest {
         match self {
             IcedTest::Loading => {
                 if let Message::Loaded(_) = message {
-                    *self = IcedTest::Loaded(AppState::default())
+                    *self = IcedTest::Loaded(AppState::default());                    
                 }
+                Command::none()
             }
             IcedTest::Loaded(state) => match message {
-                Message::FontLoaded(_) => {}
-                Message::Loaded(_) => {}
+                Message::FontLoaded(_) => Command::none(),
+                Message::Loaded(_) => Command::none(),
                 Message::BodyNameInputChanged(value) => state.update_body_name(&value),
                 Message::BodyMassInputChanged(value) => state.update_body_mass( &value),
                 Message::BodyCmxInputChanged(value) => state.update_body_cmx( &value),
@@ -440,15 +476,15 @@ impl Application for IcedTest {
                 Message::LeftButtonReleased(cursor) => state.left_button_released(cursor),
                 Message::RightButtonPressed(cursor) => state.right_button_pressed(cursor),
                 Message::RightButtonReleased(cursor) => state.right_button_released(cursor),
-                Message::CloseModal => state.modal = None,
+                Message::CloseModal => state.close_modal(),
                 Message::CursorMoved(cursor) => state.cursor_moved(cursor),
                 Message::DeletePressed => state.delete_pressed(),
                 Message::EnterPressed => state.enter_pressed(),
+                Message::TabPressed => state.tab_pressed(),
                 Message::SaveComponent => state.save_component(),
                 Message::WindowResized(size) => state.window_resized(size),
             },
-        }
-        Command::none()
+        }        
     }
 
     fn view(&self) -> Element<Message, crate::ui::theme::Theme> {
@@ -466,6 +502,7 @@ impl Application for IcedTest {
             iced::Event::Keyboard(keyboard::Event::KeyPressed { key, .. }) => match key {
                 keyboard::Key::Named(keyboard::key::Named::Enter) => Some(Message::EnterPressed),
                 keyboard::Key::Named(keyboard::key::Named::Delete) => Some(Message::DeletePressed),
+                keyboard::Key::Named(keyboard::key::Named::Tab) => Some(Message::TabPressed),
                 _ => None,
             },
             _ => None,
@@ -619,6 +656,7 @@ fn create_body_modal(body: &DummyBody) -> Element<Message, crate::ui::theme::The
             &body.iyz,
             Message::BodyIyzInputChanged,
         ));
+        
 
     let footer = Row::new()
         .spacing(10)

@@ -2,7 +2,7 @@ use iced::Point;
 use iced::widget::canvas::{Path,stroke::{self,Stroke}};
 use uuid::Uuid;
 use std::collections::HashMap;
-use crate::ui::canvas::node::Node;
+use crate::ui::canvas::graph::GraphNode;
 use crate::ui::theme::Theme;
 
 #[derive(Debug, Clone)]
@@ -27,14 +27,14 @@ impl Edge {
         }
     }
 
-    pub fn draw(&self, frame: &mut iced::widget::canvas::Frame, nodes: &HashMap<Uuid,Node>, theme: &Theme) {
+    pub fn draw(&self, frame: &mut iced::widget::canvas::Frame, nodes: &HashMap<Uuid,GraphNode>, theme: &Theme) {
         let from_point = match self.from {
-            EdgeConnection::Node(id) => nodes.get(&id).unwrap().bounds.center(),
+            EdgeConnection::Node(id) => nodes.get(&id).unwrap().node.bounds.center(),
             EdgeConnection::Point(point) => point,
         };
         
         let to_point = match self.to {
-            EdgeConnection::Node(id) => nodes.get(&id).unwrap().bounds.center(),
+            EdgeConnection::Node(id) => nodes.get(&id).unwrap().node.bounds.center(),
             EdgeConnection::Point(point) => point,
         };
 

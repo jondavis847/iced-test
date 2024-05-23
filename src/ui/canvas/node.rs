@@ -1,5 +1,4 @@
 use crate::font::Font;
-use crate::ui::modals::Modals;
 use crate::ui::theme::Theme;
 use uuid::Uuid;
 
@@ -9,39 +8,29 @@ use iced::{
     Color, Point, Rectangle, Vector,
 };
 
-#[derive(Debug, Clone)]
+//TODO: Think about using MultibodyMeta instead of the individual Uuid fields
+#[derive(Debug, Clone, Copy)]
 pub struct Node {
     pub bounds: Rectangle,
-    pub home: Option<Point>,
     pub is_left_clicked: bool,
     pub is_middle_clicked: bool,
-    pub is_nodebar: bool,
     pub is_right_clicked: bool,
     pub is_selected: bool,
-    pub label: String,
-    pub modal: Modals,
-    pub edges: Vec<Uuid>,
+    //pub label: String,
 }
 
 impl Node {
     pub fn new(
-        bounds: Rectangle,
-        home: Option<Point>,
-        is_nodebar: bool,
-        label: String,
-        modal: Modals,
+        bounds: Rectangle,        
+        //label: String,        
     ) -> Self {
         Self {
             bounds: bounds,
-            home: home,
             is_left_clicked: false,
             is_middle_clicked: false,
-            is_nodebar: is_nodebar,
             is_selected: false,
             is_right_clicked: false,
-            label: label,
-            modal: modal,
-            edges: Vec::new(),
+            //label: label,
         }
     }
 
@@ -51,21 +40,48 @@ impl Node {
 
         let path = Path::new(|p| {
             p.move_to(Point::new(bounds.x + corner_radius, bounds.y));
-            p.line_to(Point::new(bounds.x + bounds.width - corner_radius, bounds.y));
-            p.arc_to(Point::new(bounds.x + bounds.width, bounds.y), Point::new(bounds.x + bounds.width, bounds.y + corner_radius), corner_radius);
-            p.line_to(Point::new(bounds.x + bounds.width, bounds.y + bounds.height - corner_radius));
-            p.arc_to(Point::new(bounds.x + bounds.width, bounds.y + bounds.height), Point::new(bounds.x + bounds.width - corner_radius, bounds.y + bounds.height), corner_radius);
-            p.line_to(Point::new(bounds.x + corner_radius, bounds.y + bounds.height));
-            p.arc_to(Point::new(bounds.x, bounds.y + bounds.height), Point::new(bounds.x, bounds.y + bounds.height - corner_radius), corner_radius);
+            p.line_to(Point::new(
+                bounds.x + bounds.width - corner_radius,
+                bounds.y,
+            ));
+            p.arc_to(
+                Point::new(bounds.x + bounds.width, bounds.y),
+                Point::new(bounds.x + bounds.width, bounds.y + corner_radius),
+                corner_radius,
+            );
+            p.line_to(Point::new(
+                bounds.x + bounds.width,
+                bounds.y + bounds.height - corner_radius,
+            ));
+            p.arc_to(
+                Point::new(bounds.x + bounds.width, bounds.y + bounds.height),
+                Point::new(
+                    bounds.x + bounds.width - corner_radius,
+                    bounds.y + bounds.height,
+                ),
+                corner_radius,
+            );
+            p.line_to(Point::new(
+                bounds.x + corner_radius,
+                bounds.y + bounds.height,
+            ));
+            p.arc_to(
+                Point::new(bounds.x, bounds.y + bounds.height),
+                Point::new(bounds.x, bounds.y + bounds.height - corner_radius),
+                corner_radius,
+            );
             p.line_to(Point::new(bounds.x, bounds.y + corner_radius));
-            p.arc_to(Point::new(bounds.x, bounds.y), Point::new(bounds.x + corner_radius, bounds.y), corner_radius);
+            p.arc_to(
+                Point::new(bounds.x, bounds.y),
+                Point::new(bounds.x + corner_radius, bounds.y),
+                corner_radius,
+            );
         });
-    
+
         path
     }
 
-    pub fn draw(&self, frame: &mut Frame, theme: &Theme) {
-        
+    pub fn draw(&self, frame: &mut Frame, theme: &Theme, label: &str) {
         let background = self.draw_node_path();
 
         let node_border_color;
@@ -88,7 +104,7 @@ impl Node {
             );
             frame.fill(&background, node_background_color);
             frame.fill_text(Text {
-                content: self.label.clone(),
+                content: label.to_string(),
                 color: Color::WHITE, //theme.edge_multibody,
                 font: Font::MONOSPACE,
                 horizontal_alignment: Horizontal::Center,
@@ -117,14 +133,13 @@ impl Node {
             crate::MouseButton::Right => self.is_right_clicked = is_inside,
             crate::MouseButton::Middle => self.is_middle_clicked = is_inside,
         }
-    }
-
-    pub fn drop(&mut self) {
-        if let Some(home) = &self.home {
-            //send it home
-            self.bounds.x = home.x;
-            self.bounds.y = home.y;
-            self.is_left_clicked = false;
-        }
-    }
+    }    
 }
+
+#[derive(Debug, Clone)]
+pub struct GraphNode {
+    pub component: Uuid,
+    pub edges: Vec<Uuid>,
+    pub node: Node,
+}
+

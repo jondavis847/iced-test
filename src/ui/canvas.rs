@@ -11,10 +11,11 @@ use iced::{
 pub mod edge;
 pub mod graph;
 pub mod node;
-pub mod node_bar;
+pub mod nodebar;
 
-use crate::Message;
+use crate::multibody::MultibodyTrait;
 use crate::ui::theme::Theme;
+use crate::Message;
 
 #[derive(Debug)]
 pub struct GraphCanvas<'a> {
@@ -38,7 +39,7 @@ impl Default for CanvasState {
     }
 }
 
-impl<'a> canvas::Program<Message,Theme> for GraphCanvas<'a> {
+impl<'a> canvas::Program<Message, Theme> for GraphCanvas<'a> {
     type State = ();
 
     fn update(
@@ -52,7 +53,7 @@ impl<'a> canvas::Program<Message,Theme> for GraphCanvas<'a> {
             return (Status::Ignored, None);
         };
 
-        match event {            
+        match event {
             Event::Mouse(mouse_event) => match mouse_event {
                 mouse::Event::ButtonPressed(mouse::Button::Left) => {
                     (Status::Captured, Some(Message::LeftButtonPressed(cursor)))
@@ -84,8 +85,6 @@ impl<'a> canvas::Program<Message,Theme> for GraphCanvas<'a> {
         _cursor: mouse::Cursor,
     ) -> Vec<Geometry> {
         let all_content = self.app_state.cache.draw(renderer, bounds.size(), |frame| {
-
-            
             // node_bar border
             frame.stroke(
                 &Path::rectangle(Point::ORIGIN, self.app_state.nodebar.bounds.size()),
@@ -98,31 +97,41 @@ impl<'a> canvas::Program<Message,Theme> for GraphCanvas<'a> {
                 Stroke::default().with_width(2.0),
             );
 
-
             // create edges (before nodes so nodes clip)
             frame.with_clip(self.app_state.graph.bounds, |frame| {
-                self.app_state.edges.iter().for_each(|(_, edge)| {                    
-                    edge.draw(frame, &self.app_state.nodes, &self.app_state.theme)                    
+                self.app_state.graph.edges.iter().for_each(|(_, edge)| {
+                    edge.draw(frame, &self.app_state.graph.nodes, &self.app_state.theme)
                 });
             });
 
             // create nodes that are not clipped (nodebar)
-            self.app_state.nodes.iter().for_each(|(_, node)| {
-                if node.is_nodebar {
-                    node.draw(frame, &self.app_state.theme)
-                }
-            });
+            self.app_state
+                .nodebar
+                .nodes
+                .iter()
+                .for_each(|(_, nodebarnode)| {
+                    let label = &nodebarnode.label;
+                    nodebarnode.node.draw(frame, &self.app_state.theme, label);
+                });
 
             // create nodes that are clipped (graph)
             frame.with_clip(self.app_state.graph.bounds, |frame| {
-                self.app_state.nodes.iter().for_each(|(_, node)| {
-                    if !node.is_nodebar {
-                        node.draw(frame, &self.app_state.theme)
-                    }
-                });
+                self.app_state
+                    .graph
+                    .nodes
+                    .iter()
+                    .for_each(|(_, graphnode)| {
+                        if let Some(component) =
+                            self.app_state.graph.components.get(&graphnode.component_id)
+                        {
+                            if let Some(label) =
+                                self.app_state.graph.names.get(component.get_name_id())
+                            {
+                                graphnode.node.draw(frame, &self.app_state.theme, label)
+                            }
+                        }
+                    });
             });
-            
-
         });
         vec![all_content]
     }
@@ -134,7 +143,7 @@ impl<'a> canvas::Program<Message,Theme> for GraphCanvas<'a> {
         cursor: mouse::Cursor,
     ) -> mouse::Interaction {
         if cursor.is_over(bounds) {
-            if self.app_state.is_pressed {
+            if self.app_state.graph.is_clicked {
                 mouse::Interaction::Grabbing
             } else {
                 mouse::Interaction::Grab

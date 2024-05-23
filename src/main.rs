@@ -13,7 +13,6 @@ use iced::{
 };
 
 use iced_aw::{card, modal};
-use multibody::Revolute;
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 use uuid::Uuid;
@@ -21,13 +20,14 @@ use uuid::Uuid;
 mod multibody;
 mod ui;
 
-use crate::multibody::{Base, Body, Joint};
+use crate::multibody::{base::Base, body::Body, joints::Joint, MultibodyComponent, MultibodyTrait};
 use crate::ui::canvas::edge::{Edge, EdgeConnection};
-use crate::ui::canvas::graph::Graph;
+use crate::ui::canvas::graph::{Graph, GraphMessage};
 use crate::ui::canvas::node::Node;
-use crate::ui::canvas::node_bar::{NodeBar, NodeBarMap};
+use crate::ui::canvas::nodebar::{Nodebar, NodebarMessage};
 use crate::ui::canvas::GraphCanvas;
-use crate::ui::modals::Modals;
+use crate::ui::dummies::{DummyBase, DummyBody, DummyComponent, DummyRevolute, DummyTrait};
+use crate::ui::modals::ActiveModal;
 
 fn main() -> iced::Result {
     let mut settings = Settings::default();
@@ -60,9 +60,7 @@ enum Message {
     EnterPressed,
     FontLoaded(Result<(), font::Error>),
     Loaded(Result<(), String>),
-    SaveBase,
-    SaveBody(Body),
-    SaveRevolute(Revolute),
+    SaveComponent,
     WindowResized(Size),
 }
 
@@ -74,55 +72,57 @@ enum IcedTest {
 
 #[derive(Debug)]
 struct AppState {
-    base: Option<Base>,
-    bodies: HashMap<Uuid, crate::multibody::Body>,
+    //base: Option<Base>,
+    //bodies: HashMap<Uuid, Body>,
     cache: Cache,
+    //components: HashMap<Uuid, Components>,
     //connections: HashMap<Uuid,Connection>,
     counter_body: usize,
     counter_revolute: usize,
-    joints: HashMap<Uuid, crate::multibody::Joint>,
-    left_clicked_node: Option<Uuid>,
+    current_edge: Option<Uuid>,
+    //edges: HashMap<Uuid, Edge>,
+    graph: Graph,
+    //is_pressed: bool,
+    //joints: HashMap<Uuid, crate::multibody::Joint>,
+    //last_graph_cursor_position: Point,
+    //left_clicked_node: Option<Uuid>,
     left_clicked_time_1: Option<Instant>,
     left_clicked_time_2: Option<Instant>,
-    right_clicked_node: Option<Uuid>,
-    middle_clicked_node: Option<Uuid>,
-    selected_node: Option<Uuid>,
-    current_edge: Option<Uuid>,
-    edges: HashMap<Uuid, Edge>,
-    graph: Graph,
-    is_pressed: bool,
-    last_graph_cursor_position: Point,
-    modal: Option<Uuid>, //uuid of node, modal is owned by node
-    nodebar: NodeBar,
-    nodes: HashMap<Uuid, Node>,
+    //middle_clicked_node: Option<Uuid>,
+    modal: Option<ActiveModal>, //uuid of node, modal is owned by node
+    names: HashMap<Uuid, String>,
+    nodebar: Nodebar,
+    //nodes: HashMap<Uuid, Node>,
+    //right_clicked_node: Option<Uuid>,
+    //selected_node: Option<Uuid>,
     theme: crate::ui::theme::Theme,
 }
 
 impl Default for AppState {
     fn default() -> Self {
-        let nodebar = NodeBar::default();
-        let default_nodes = default_nodes(nodebar.clone().map);
         Self {
-            base: None,
-            bodies: HashMap::new(),
-            joints: HashMap::new(),
+            //base: None,
+            //bodies: HashMap::new(),
+            // joints: HashMap::new(),
             cache: Cache::new(),
+            //components: HashMap::new(),
             counter_body: 0,
             counter_revolute: 0,
-            left_clicked_node: None,
+            //left_clicked_node: None,
             left_clicked_time_1: None,
             left_clicked_time_2: None,
-            right_clicked_node: None,
-            middle_clicked_node: None,
-            selected_node: None,
+            //right_clicked_node: None,
+            //middle_clicked_node: None,
+            names: HashMap::new(),
+            //selected_node: None,
             current_edge: None,
-            edges: HashMap::new(),
+            //edges: HashMap::new(),
             graph: Graph::default(),
-            is_pressed: false,
-            last_graph_cursor_position: Point::default(),
+            //is_pressed: false,
+            //last_graph_cursor_position: Point::default(),
             modal: None,
-            nodebar: nodebar,
-            nodes: default_nodes,
+            nodebar: Nodebar::default(),
+            //nodes: HashMap::new(),
             theme: crate::ui::theme::Theme::ORANGE,
             //theme: crate::ui::canvas::themes::Themes::cyberpunk(),
         }
@@ -145,142 +145,29 @@ enum MouseButtonReleaseEvents {
 
 impl AppState {
     pub fn get_clicked_node(&mut self, cursor: Cursor, mouse_button: &MouseButton) {
-        match mouse_button {
-            MouseButton::Left => self.left_clicked_node = None,
-            MouseButton::Right => self.right_clicked_node = None,
-            MouseButton::Middle => self.middle_clicked_node = None,
-        }
-
-        self.nodes.iter_mut().for_each(|(key, node)| {
-            if node.is_nodebar {
-                // use canvas position
-                if let Some(cursor_position) = cursor.position() {
-                    node.is_clicked(cursor_position, mouse_button);
-                    match mouse_button {
-                        MouseButton::Left => {
-                            if node.is_left_clicked {
-                                self.left_clicked_node = Some(key.clone());
-                            }
-                        }
-                        MouseButton::Right => {
-                            if node.is_right_clicked {
-                                self.right_clicked_node = Some(key.clone());
-                            }
-                        }
-                        MouseButton::Middle => {
-                            if node.is_middle_clicked {
-                                self.middle_clicked_node = Some(key.clone());
-                            }
-                        }
-                    }
-                }
-            } else {
-                // use graph position
-                if let Some(cursor_position) = cursor.position_in(self.graph.bounds) {
-                    node.is_clicked(cursor_position, mouse_button);
-                    match mouse_button {
-                        MouseButton::Left => {
-                            if node.is_left_clicked {
-                                self.left_clicked_node = Some(key.clone());
-                            }
-                        }
-                        MouseButton::Right => {
-                            if node.is_right_clicked {
-                                self.right_clicked_node = Some(key.clone());
-                            }
-                        }
-                        MouseButton::Middle => {
-                            if node.is_middle_clicked {
-                                self.middle_clicked_node = Some(key.clone());
-                            }
-                        }
-                    }
-                }
-            }
-        });
+        self.nodebar.get_clicked_node(cursor, mouse_button);
+        self.graph.get_clicked_node(cursor, mouse_button);
+        self.cache.clear();
     }
 
     pub fn cursor_moved(&mut self, cursor: Cursor) {
-        if let Some(clicked_node_id) = self.left_clicked_node {
-            // a node is clicked and being dragged
-            if let Some(clicked_node) = self.nodes.get_mut(&clicked_node_id) {
-                if clicked_node.is_nodebar {
-                    if let Some(cursor_position) = cursor.position() {
-                        clicked_node.translate_to(cursor_position);
-                        self.cache.clear();
-                    }
-                } else {
-                    if let Some(cursor_position) = cursor.position_in(self.graph.bounds) {
-                        clicked_node.translate_to(cursor_position);
-                        self.cache.clear();
-                        self.last_graph_cursor_position = cursor_position;
-                    }
-                }
-            }
-        } else {
-            // no node is clicked, graph is translating if the cursor is clicked on the graph
-            if self.is_pressed {
-                if let Some(graph_cursor_position) = cursor.position_in(self.graph.bounds) {
-                    let delta = graph_cursor_position - self.last_graph_cursor_position;
-                    self.nodes.iter_mut().for_each(|(_, node)| {
-                        if !node.is_nodebar {
-                            node.translate_by(delta);
-                        }
-                    });
-                    self.last_graph_cursor_position = graph_cursor_position;
-                    self.cache.clear();
-                }
-            }
-        }
-        if let Some(cursor_position) = cursor.position_in(self.graph.bounds) {
-            if let Some(clicked_node_id) = self.right_clicked_node {
-                //edge is being drawn
-                if let Some(edge_id) = self.current_edge {
-                    //keep moving current_edge
-                    if let Some(edge) = self.edges.get_mut(&edge_id) {
-                        edge.to = EdgeConnection::Point(cursor_position);
-                    }
-                } else {
-                    //create a new edge
-                    let new_edge = Edge::new(
-                        EdgeConnection::Node(clicked_node_id),
-                        EdgeConnection::Point(cursor_position),
-                    );
-                    let new_edge_id = Uuid::new_v4();
-                    self.edges.insert(new_edge_id, new_edge);
-                    self.current_edge = Some(new_edge_id);
-                    //add the edge to the from node so that if from node is deleted, edge is deleted
-                    if let Some(from_node) = self.nodes.get_mut(&clicked_node_id) {
-                        from_node.edges.push(new_edge_id);
-                    }
-                }
-                self.cache.clear();
-            }
-        }
+        self.nodebar.cursor_moved(cursor);
+        self.cache.clear();
+        self.graph.cursor_moved(cursor);
+        self.cache.clear();
     }
-    pub fn left_button_pressed(&mut self, cursor: Cursor) {
-        self.is_pressed = true;
 
+    pub fn left_button_pressed(&mut self, cursor: Cursor) {
         self.left_clicked_time_1 = self.left_clicked_time_2;
         self.left_clicked_time_2 = Some(Instant::now());
 
         self.get_clicked_node(cursor, &MouseButton::Left);
-        if let Some(selected_node) = self.left_clicked_node {
-            self.selected_node = Some(selected_node);
-        } else {
-            self.selected_node = None;
-        }
-        if let Some(graph_cursor_position) = cursor.position_in(self.graph.bounds) {
-            self.last_graph_cursor_position = graph_cursor_position;
-        }
+        self.cache.clear();
     }
 
     pub fn left_button_released(&mut self, cursor: Cursor) {
-        self.is_pressed = false;
-
         // Determine the type of mouse button release event
-        let release_event = match (self.left_clicked_time_1, self.left_clicked_time_2) {            
-            
+        let release_event = match (self.left_clicked_time_1, self.left_clicked_time_2) {
             (Some(clicked_time_1), Some(clicked_time_2)) => {
                 let clicked_elapsed_time_1 = clicked_time_1.elapsed();
                 let clicked_elapsed_time_2 = clicked_time_2.elapsed();
@@ -293,7 +180,7 @@ impl AppState {
                     MouseButtonReleaseEvents::Held
                 }
             }
-            (None,Some(clicked_time_2)) => {
+            (None, Some(clicked_time_2)) => {
                 if clicked_time_2.elapsed() <= Duration::from_millis(200) {
                     MouseButtonReleaseEvents::SingleClick
                 } else {
@@ -302,343 +189,246 @@ impl AppState {
             }
             _ => MouseButtonReleaseEvents::Nothing,
         };
-        
-        // Handle the click event on the node
-        if let Some(clicked_node_id) = self.left_clicked_node {
-            // First clear any selected_nodes
-            self.nodes.iter_mut().for_each(|(_, node)| {
-                node.is_selected = false;
-            });
-            if let Some(clicked_node) = self.nodes.get_mut(&clicked_node_id) {
-                match release_event {
-                    MouseButtonReleaseEvents::DoubleClick => {
-                        self.modal = Some(clicked_node_id);
-                    }
-                    MouseButtonReleaseEvents::SingleClick => {
-                        if !clicked_node.is_nodebar {
-                            clicked_node.is_selected = true;
-                        }
-                    }
-                    MouseButtonReleaseEvents::Held => {
-                        if clicked_node.is_nodebar {
-                            if let Some(cursor_position) = cursor.position_in(self.graph.bounds) {
-                                self.last_graph_cursor_position = cursor_position;
+
+        if let Some(graph_message) = self.graph.left_button_released(&release_event, cursor) {
+            match graph_message {
+                GraphMessage::EditComponent(id) => {                    
+                    if let Some(component) = self.graph.components.get(&id) {
+                        let active_modal = ActiveModal::new(*component.get_dummy_id(), Some(id));
+
+                        if let Some(dummy) = self
+                            .nodebar
+                            .components
+                            .get_mut(&active_modal.dummy_component_id) {
+                
+                            if let Some(component_id) = active_modal.graph_component_id {
+                                //editing an existing component, populate values
+                                dummy.inherit_from(&component_id, &self.graph);
                             }
-                            self.modal = Some(clicked_node_id);
+
+                            self.modal = Some(active_modal);
                         }
-                        clicked_node.drop();
                     }
-                    MouseButtonReleaseEvents::Nothing => {}
                 }
             }
-            self.left_clicked_node = None;
-        } else {
-            // Clear all selections if no node was clicked
-            self.nodes
-                .values_mut()
-                .for_each(|node| node.is_selected = false);
-            self.selected_node = None;
         }
-
-        // Clear the cache
+        if let Some(bar_message) = self.nodebar.left_button_released(&release_event) {
+            match bar_message {
+                NodebarMessage::NewComponent(id) => {                        
+                    if let Some(component) = self.nodebar.components.get(&id) {
+                        let active_modal = ActiveModal::new(id, None);
+                        self.modal = Some(active_modal);
+                    }
+                }
+            }
+        }
         self.cache.clear();
     }
 
     pub fn right_button_pressed(&mut self, cursor: Cursor) {
         self.get_clicked_node(cursor, &MouseButton::Right);
-        if let Some(graph_cursor_position) = cursor.position_in(self.graph.bounds) {
-            self.last_graph_cursor_position = graph_cursor_position;
-        }
     }
 
     pub fn right_button_released(&mut self, cursor: Cursor) {
-        if let Some(edge_id) = self.current_edge {
-            if let Some(snappable_node_id) = self.get_snappable_node(cursor, &self.nodes) {
-                let to_node_modal = self
-                    .nodes
-                    .get(&snappable_node_id)
-                    .map(|node| node.modal.clone());
-
-                if let Some(to_node_modal) = to_node_modal {
-                    let valid_connection = {
-                        if let Some(active_edge) = self.edges.get(&edge_id) {
-                            match active_edge.from {
-                                EdgeConnection::Node(node_id) => {
-                                    self.nodes.get(&node_id).map_or(false, |from_node| {
-                                        self.is_valid_connection(&from_node.modal, &to_node_modal)
-                                    })
-                                }
-                                EdgeConnection::Point(_) => false,
-                            }
-                        } else {
-                            false
-                        }
-                    };
-
-                    if valid_connection {
-                        if let Some(active_edge) = self.edges.get_mut(&edge_id) {
-                            if let EdgeConnection::Node(_) = active_edge.from {
-                                if let Some(to_node) = self.nodes.get_mut(&snappable_node_id) {
-                                    to_node.edges.push(edge_id);
-                                    active_edge.to = EdgeConnection::Node(snappable_node_id);
-                                }
-                            }
-                        }
-                    } else {
-                        self.edges.remove(&edge_id);
-                    }
-                }
-            } else {
-                self.edges.remove(&edge_id);
-            }
-        }
-
-        self.current_edge = None;
-        self.right_clicked_node = None;
+        self.graph.right_button_released(cursor);
+        //self.nodebar.right_button_released(); //no use for it yet
         self.cache.clear();
     }
 
-    fn is_valid_connection(&self, from_modal: &Modals, to_modal: &Modals) -> bool {
-        matches!(
-            (from_modal, to_modal),
-            (Modals::Base, Modals::Revolute(_))
-                | (Modals::Body(_), Modals::Revolute(_))
-                | (Modals::Revolute(_), Modals::Base)
-                | (Modals::Revolute(_), Modals::Body(_))
-        )
+    fn get_name(&self, id: &Uuid) -> Option<&String> {
+        self.names.get(id)
+    }
+
+    fn set_name(&mut self, id: &Uuid, name: String) {
+        self.names.insert(*id, name);
     }
 
     pub fn delete_pressed(&mut self) {
-        if let Some(selected_node_id) = self.selected_node {
-            // Collect edges to be removed
-            let edges_to_remove = if let Some(selected_node) = self.nodes.get(&selected_node_id) {
-                selected_node.edges.clone()
-            } else {
-                Vec::new()
-            };
-
-            // Remove edges from all nodes and edges collection
-            for edge_id in edges_to_remove {
-                for node in self.nodes.values_mut() {
-                    node.edges.retain(|x| x != &edge_id);
-                }
-                self.edges.remove(&edge_id);
-            }
-
-            // Remove the selected node itself
-            self.nodes.remove(&selected_node_id);
-            self.selected_node = None;
-
-            // Clear the cache
-            self.cache.clear();
-        }
+        self.graph.delete_pressed();
+        //self.nodebar.delete_pressed(); // no need for this, maybe ever?
+        self.cache.clear();
     }
 
-    /// Handles the enter key press event.
-    ///
-    /// This function is called when the enter key is pressed. It checks if a modal is active,
-    /// retrieves the corresponding node and modal, and then saves the data based on the modal type.
-    /// Finally, it clears the cache.
     pub fn enter_pressed(&mut self) {
-        if let Some(modal_node_id) = self.modal {
-            // If a modal is active, retrieve the corresponding node
-            if let Some(modal_node) = self.nodes.get(&modal_node_id) {
-                // Clone the modal to avoid borrowing issues
-                match modal_node.modal.clone() {
-                    Modals::Base => self.save_base(),
-                    Modals::Body(modal) => self.save_body(modal),
-                    Modals::Revolute(modal) => self.save_revolute(modal),
-                }
-                // Clear the cache after saving the data
-                self.cache.clear();
-            }
-        }
+        self.save_component()
     }
 
-    /// Saves a new body to the canvas.
-    ///
-    /// This function is called when adding a new body to the canvas. It ensures that the body has
-    /// a unique name if it doesn't already have one, calculates its position, creates a new node
-    /// for it, and inserts both the body and the node into their respective collections.
-    ///
-    /// # Parameters
-    ///
-    /// * `orig_body` - The original body to be added to the canvas.
-    ///
-    /// # Behavior
-    ///
-    /// - If the body's name is empty, it assigns a unique name in the format `bodyN`, where `N` is
-    ///   a counter incremented for each new body.
-    /// - The function calculates the bounds for the new node based on the last graph cursor position.
-    /// - It creates a new node and assigns a unique ID to both the node and the body.
-    /// - It inserts the new body and node into the `bodies` and `nodes` collections respectively.
-    /// - It clears the modal and the cache after the body is saved.
-    pub fn save_body(&mut self, mut body: Body) {
+    pub fn save_component(&mut self) {
+        // early return
+        let modal = match self.modal {
+            Some(ref modal) => modal,
+            None => return,
+        };
+
+        // early return
+        let dummy_component = match self.nodebar.components.get_mut(&modal.dummy_component_id) {
+            Some(component) => component,
+            None => return,
+        };
+
         // Ensure the body has a unique name if it's empty
-        if body.name.is_empty() {
-            self.counter_body += 1;
-            body.name = format!("body{}", self.counter_body);
+        if dummy_component.get_name().is_empty() {
+            let name = match dummy_component {
+                DummyComponent::Base(_) => "base".to_string(),
+                DummyComponent::Body(_) => {
+                    self.counter_body += 1;
+                    format!("body{}", self.counter_body)
+                }
+                DummyComponent::Revolute(joint) => {
+                    self.counter_revolute += 1;
+                    format!("revolute{}", self.counter_revolute)
+                }
+            };
+            dummy_component.set_name(&name);
         }
-
-        // Create the body modal with the updated body
-        let body_modal = Modals::Body(body.clone());
-
-        // Calculate the bounds for the new node
-        let size = Size::new(100.0, 50.0); // TODO: make width dynamic based on name length
-        let top_left = Point::new(
-            self.last_graph_cursor_position.x - size.width / 2.0,
-            self.last_graph_cursor_position.y - size.height / 2.0,
-        );
-        let bounds = Rectangle::new(top_left, size);
-
-        // Generate unique IDs for the node and body
-        let node_id = Uuid::new_v4();
-        let body_id = Uuid::new_v4();
-
-        // Update the body with the new node ID
-        body.node = node_id.clone();
-
-        // Create the new node
-        let node = Node::new(bounds, None, false, body.name.clone(), body_modal);
-
-        // Insert the new body and node into their respective collections
-        self.bodies.insert(body_id, body);
-        self.nodes.insert(node_id, node);
+        self.graph.save_component(&dummy_component);
 
         // Clear the modal and cache
         self.modal = None;
         self.cache.clear();
     }
 
-    pub fn save_base(&mut self) {
-        let size = Size::new(100.0, 50.0); //TODO: make width dynamic based on name length
-        let top_left = Point::new(
-            self.last_graph_cursor_position.x - size.width / 2.0,
-            self.last_graph_cursor_position.y - size.height / 2.0,
-        );
-        let bounds = Rectangle::new(top_left, size);
-
-        let node_id = Uuid::new_v4();
-        let node = Node::new(bounds, None, false, "base".to_string(), Modals::Base);
-
-        let base = Base::new(node_id);
-        self.base = Some(base);
-        self.nodes.insert(node_id.clone(), node);
-        self.modal = None;
-        self.cache.clear();
-    }
-
-    pub fn save_revolute(&mut self, mut joint: Revolute) {
-        // Ensure the body has a unique name if it's empty
-        if joint.name.is_empty() {
-            self.counter_revolute += 1;
-            joint.name = format!("revolute{}", self.counter_revolute);
+    fn update_body_name(&mut self, value: &str) {
+        if let Some(dummy_component) = self.nodebar.components.get_mut(&self.nodebar.map.body) {
+            if let DummyComponent::Body(dummy_body) = dummy_component {
+                dummy_body.set_name(value);
+            } else {
+                // Handle error: must be the dummy body
+                eprintln!("Error: Component is not a DummyBody");
+            }
         }
-
-        let joint_modal = Modals::Revolute(joint.clone());
-
-        let size = Size::new(100.0, 50.0); //TODO: make width dynamic based on name length
-        let top_left = Point::new(
-            self.last_graph_cursor_position.x - size.width / 2.0,
-            self.last_graph_cursor_position.y - size.height / 2.0,
-        );
-        let bounds = Rectangle::new(top_left, size);
-
-        let node_id = Uuid::new_v4();
-        let node = Node::new(bounds, None, false, joint.name.clone(), joint_modal);
-
-        let joint_id = Uuid::new_v4();
-        let revolute = Revolute::new(joint.name.clone(), joint_id);
-        let joint = Joint::Revolute(revolute);
-
-        self.joints.insert(joint_id, joint);
-        self.nodes.insert(node_id.clone(), node);
-        self.modal = None;
-        self.cache.clear();
     }
-
-    fn get_snappable_node(&self, cursor: Cursor, nodes: &HashMap<Uuid, Node>) -> Option<Uuid> {
-        let mut snap_to = None;
-        if let Some(cursor_position) = cursor.position_in(self.graph.bounds) {
-            nodes.iter().for_each(|(id, node)| {
-                if (cursor_position.x > node.bounds.x
-                    && cursor_position.x < node.bounds.x + node.bounds.width)
-                    && (cursor_position.y > node.bounds.y
-                        && cursor_position.y < node.bounds.y + node.bounds.height)
-                {
-                    snap_to = Some(id.clone());
-                }
-            });
+    
+    fn update_body_mass(&mut self, value: &str) {
+        if let Some(dummy_component) = self.nodebar.components.get_mut(&self.nodebar.map.body) {
+            if let DummyComponent::Body(dummy_body) = dummy_component {
+                dummy_body.mass = value.to_string();
+            } else {
+                // Handle error: must be the dummy body
+                eprintln!("Error: Component is not a DummyBody");
+            }
         }
-        snap_to
     }
+    
+    fn update_body_cmx(&mut self, value: &str) {
+        if let Some(dummy_component) = self.nodebar.components.get_mut(&self.nodebar.map.body) {
+            if let DummyComponent::Body(dummy_body) = dummy_component {
+                dummy_body.cmx = value.to_string();
+            } else {
+                // Handle error: must be the dummy body
+                eprintln!("Error: Component is not a DummyBody");
+            }
+        }
+    }
+    
+    fn update_body_cmy(&mut self, value: &str) {
+        if let Some(dummy_component) = self.nodebar.components.get_mut(&self.nodebar.map.body) {
+            if let DummyComponent::Body(dummy_body) = dummy_component {
+                dummy_body.cmy = value.to_string();
+            } else {
+                // Handle error: must be the dummy body
+                eprintln!("Error: Component is not a DummyBody");
+            }
+        }
+    }
+    
+    fn update_body_cmz(&mut self, value: &str) {
+        if let Some(dummy_component) = self.nodebar.components.get_mut(&self.nodebar.map.body) {
+            if let DummyComponent::Body(dummy_body) = dummy_component {
+                dummy_body.cmz = value.to_string();
+            } else {
+                // Handle error: must be the dummy body
+                eprintln!("Error: Component is not a DummyBody");
+            }
+        }
+    }
+    
+    fn update_body_ixx(&mut self, value: &str) {
+        if let Some(dummy_component) = self.nodebar.components.get_mut(&self.nodebar.map.body) {
+            if let DummyComponent::Body(dummy_body) = dummy_component {
+                dummy_body.ixx = value.to_string();
+            } else {
+                // Handle error: must be the dummy body
+                eprintln!("Error: Component is not a DummyBody");
+            }
+        }
+    }
+    
+    fn update_body_iyy(&mut self, value: &str) {
+        if let Some(dummy_component) = self.nodebar.components.get_mut(&self.nodebar.map.body) {
+            if let DummyComponent::Body(dummy_body) = dummy_component {
+                dummy_body.iyy = value.to_string();
+            } else {
+                // Handle error: must be the dummy body
+                eprintln!("Error: Component is not a DummyBody");
+            }
+        }
+    }
+    
+    fn update_body_izz(&mut self, value: &str) {
+        if let Some(dummy_component) = self.nodebar.components.get_mut(&self.nodebar.map.body) {
+            if let DummyComponent::Body(dummy_body) = dummy_component {
+                dummy_body.izz = value.to_string();
+            } else {
+                // Handle error: must be the dummy body
+                eprintln!("Error: Component is not a DummyBody");
+            }
+        }
+    }
+    
+    fn update_body_ixy(&mut self, value: &str) {
+        if let Some(dummy_component) = self.nodebar.components.get_mut(&self.nodebar.map.body) {
+            if let DummyComponent::Body(dummy_body) = dummy_component {
+                dummy_body.ixy = value.to_string();
+            } else {
+                // Handle error: must be the dummy body
+                eprintln!("Error: Component is not a DummyBody");
+            }
+        }
+    }
+    
+    fn update_body_ixz(&mut self, value: &str) {
+        if let Some(dummy_component) = self.nodebar.components.get_mut(&self.nodebar.map.body) {
+            if let DummyComponent::Body(dummy_body) = dummy_component {
+                dummy_body.ixz = value.to_string();
+            } else {
+                // Handle error: must be the dummy body
+                eprintln!("Error: Component is not a DummyBody");
+            }
+        }
+    }
+    
+    fn update_body_iyz(&mut self, value: &str) {
+        if let Some(dummy_component) = self.nodebar.components.get_mut(&self.nodebar.map.body) {
+            if let DummyComponent::Body(dummy_body) = dummy_component {
+                dummy_body.iyz = value.to_string();
+            } else {
+                // Handle error: must be the dummy body
+                eprintln!("Error: Component is not a DummyBody");
+            }
+        }
+    }
+    
+    // Helper function to update the revolute name
+    fn update_revolute_name(&mut self, value: &str) {
+        if let Some(dummy_component) = self.nodebar.components.get_mut(&self.nodebar.map.revolute) {
+            if let DummyComponent::Revolute(dummy_revolute) = dummy_component {
+                dummy_revolute.set_name(value);
+            } else {
+                // Handle error: must be the dummy revolute
+                eprintln!("Error: Component is not a DummyRevolute");
+            }
+        }    
+    }
+    
 
     fn window_resized(&mut self, window_size: Size) {
-        self.graph.bounds.height = window_size.height;
-        self.graph.bounds.width = window_size.width - self.nodebar.bounds.width;
+        let graph_size = Size::new(
+            window_size.width - self.nodebar.bounds.width,
+            window_size.height,
+        );
+        self.graph.window_resized(graph_size);
     }
-}
-
-fn create_default_node(
-    nodes: &mut HashMap<Uuid, Node>,
-    node_id: Uuid,
-    label: &str,
-    node_size: Size,
-    home: Point,
-    modal: Modals,
-) {
-    nodes.insert(
-        node_id.clone(),
-        Node::new(
-            Rectangle::new(home.clone(), node_size),
-            Some(home.clone()),
-            true,
-            label.to_string(),
-            modal,
-        ),
-    );
-}
-fn default_nodes(node_map: NodeBarMap) -> HashMap<Uuid, Node> {
-    let mut nodes = HashMap::<Uuid, Node>::new();
-
-    let padding = 15.0;
-    let mut count = 1.0;
-    let height = 50.0;
-
-    let node_size = Size::new(100.0, height);
-
-    //add base node
-    create_default_node(
-        &mut nodes,
-        node_map.base,
-        "+base",
-        node_size,
-        Point::new(padding, count * padding + (count - 1.0) * height),
-        Modals::Base,
-    );
-    count += 1.0;
-
-    create_default_node(
-        &mut nodes,
-        node_map.body,
-        "+body",
-        node_size,
-        Point::new(padding, count * padding + (count - 1.0) * height),
-        Modals::Body(Body::default()),
-    );
-    count += 1.0;
-
-    create_default_node(
-        &mut nodes,
-        node_map.revolute,
-        "+revolute",
-        node_size,
-        Point::new(padding, count * padding + (count - 1.0) * height),
-        Modals::Revolute(Revolute::default()),
-    );
-    count += 1.0;
-
-    nodes
 }
 
 async fn load() -> Result<(), String> {
@@ -675,18 +465,18 @@ impl Application for IcedTest {
             IcedTest::Loaded(state) => match message {
                 Message::FontLoaded(_) => {}
                 Message::Loaded(_) => {}
-                Message::BodyNameInputChanged(value) => update_body_name(state, &value),
-                Message::BodyMassInputChanged(value) => update_body_mass(state, &value),
-                Message::BodyCmxInputChanged(value) => update_body_cmx(state, &value),
-                Message::BodyCmyInputChanged(value) => update_body_cmy(state, &value),
-                Message::BodyCmzInputChanged(value) => update_body_cmz(state, &value),
-                Message::BodyIxxInputChanged(value) => update_body_ixx(state, &value),
-                Message::BodyIyyInputChanged(value) => update_body_iyy(state, &value),
-                Message::BodyIzzInputChanged(value) => update_body_izz(state, &value),
-                Message::BodyIxyInputChanged(value) => update_body_ixy(state, &value),
-                Message::BodyIxzInputChanged(value) => update_body_ixz(state, &value),
-                Message::BodyIyzInputChanged(value) => update_body_iyz(state, &value),
-                Message::RevoluteNameInputChanged(value) => update_revolute_name(state, &value),
+                Message::BodyNameInputChanged(value) => state.update_body_name(&value),
+                Message::BodyMassInputChanged(value) => state.update_body_mass( &value),
+                Message::BodyCmxInputChanged(value) => state.update_body_cmx( &value),
+                Message::BodyCmyInputChanged(value) => state.update_body_cmy( &value),
+                Message::BodyCmzInputChanged(value) => state.update_body_cmz( &value),
+                Message::BodyIxxInputChanged(value) => state.update_body_ixx( &value),
+                Message::BodyIyyInputChanged(value) => state.update_body_iyy( &value),
+                Message::BodyIzzInputChanged(value) => state.update_body_izz( &value),
+                Message::BodyIxyInputChanged(value) => state.update_body_ixy( &value),
+                Message::BodyIxzInputChanged(value) => state.update_body_ixz( &value),
+                Message::BodyIyzInputChanged(value) => state.update_body_iyz( &value),
+                Message::RevoluteNameInputChanged(value) => state.update_revolute_name( &value),
                 Message::LeftButtonPressed(cursor) => state.left_button_pressed(cursor),
                 Message::LeftButtonReleased(cursor) => state.left_button_released(cursor),
                 Message::RightButtonPressed(cursor) => state.right_button_pressed(cursor),
@@ -695,9 +485,7 @@ impl Application for IcedTest {
                 Message::CursorMoved(cursor) => state.cursor_moved(cursor),
                 Message::DeletePressed => state.delete_pressed(),
                 Message::EnterPressed => state.enter_pressed(),
-                Message::SaveBase => state.save_base(),
-                Message::SaveBody(modal) => state.save_body(modal),
-                Message::SaveRevolute(modal) => state.save_revolute(modal),
+                Message::SaveComponent => state.save_component(),
                 Message::WindowResized(size) => state.window_resized(size),
             },
         }
@@ -752,20 +540,29 @@ fn loaded_view(state: &AppState) -> Element<Message, crate::ui::theme::Theme> {
 
     let underlay = Row::new().push(graph_container);
 
-    let overlay = if let Some(active_modal_id) = state.modal {
-        if let Some(active_node) = state.nodes.get(&active_modal_id) {
-            match &active_node.modal {
-                Modals::Base => Some(create_base_modal()),
-                Modals::Body(body) => Some(create_body_modal(body)),
-                Modals::Revolute(joint) => Some(create_revolute_modal(joint)),
+    let overlay = 
+    // if we have an ActiveModal
+    if let Some(active_modal) = state.modal {
+        // and there's a DummyComponent for that ActiveModal
+        if let Some(dummy) = state
+            .nodebar
+            .components
+            .get(&active_modal.dummy_component_id)
+        {
+            match dummy {
+                DummyComponent::Base(base) => Some(create_base_modal(base)),
+                DummyComponent::Body(body) => Some(create_body_modal(body)),
+                DummyComponent::Revolute(joint) => Some(create_revolute_modal(joint)),
                 _ => None,
+            }
+            } else {
+                None
             }
         } else {
             None
-        }
-    } else {
-        None
-    };
+        };
+    
+    
 
     modal(underlay, overlay)
         .on_esc(Message::CloseModal)
@@ -773,7 +570,7 @@ fn loaded_view(state: &AppState) -> Element<Message, crate::ui::theme::Theme> {
         .into()
 }
 
-fn create_base_modal() -> Element<'static, Message, crate::ui::theme::Theme> {
+fn create_base_modal(base: &DummyBase) -> Element<'static, Message, crate::ui::theme::Theme> {
     let content = Column::new();
     let footer = Row::new()
         .spacing(10)
@@ -782,12 +579,12 @@ fn create_base_modal() -> Element<'static, Message, crate::ui::theme::Theme> {
         .push(
             button("Cancel")
                 .width(Length::Fill)
-                .on_press(crate::Message::CloseModal),
+                .on_press(Message::CloseModal),
         )
         .push(
             button("Ok")
                 .width(Length::Fill)
-                .on_press(crate::Message::SaveBase),
+                .on_press(Message::SaveComponent),
         );
 
     card("Base Information", content)
@@ -796,8 +593,7 @@ fn create_base_modal() -> Element<'static, Message, crate::ui::theme::Theme> {
         .into()
 }
 
-fn create_body_modal(body: &Body) -> Element<Message, crate::ui::theme::Theme> {
-    let body_clone = body.clone();
+fn create_body_modal(body: &DummyBody) -> Element<Message, crate::ui::theme::Theme> {    
     let create_text_input = |label: &str, value: &str, on_input: fn(String) -> Message| {
         Row::new()
             .spacing(10)
@@ -805,7 +601,7 @@ fn create_body_modal(body: &Body) -> Element<Message, crate::ui::theme::Theme> {
             .push(
                 text_input(label, value)
                     .on_input(on_input)
-                    .on_submit(Message::SaveBody(body_clone.clone()))
+                    .on_submit(Message::SaveComponent)
                     .width(Length::FillPortion(4)),
             )
             .width(Length::Fill)
@@ -814,58 +610,58 @@ fn create_body_modal(body: &Body) -> Element<Message, crate::ui::theme::Theme> {
     let content = Column::new()
         .push(create_text_input(
             "name",
-            &body_clone.name,
-            crate::Message::BodyNameInputChanged,
+            &body.name,
+            Message::BodyNameInputChanged,
         ))
         .push(create_text_input(
             "mass",
-            &body_clone.mass.to_string(),
-            crate::Message::BodyMassInputChanged,
+            &body.mass,
+            Message::BodyMassInputChanged,
         ))
         .push(create_text_input(
             "cmx",
-            &body_clone.cmx.to_string(),
-            crate::Message::BodyCmxInputChanged,
+            &body.cmx,
+            Message::BodyCmxInputChanged,
         ))
         .push(create_text_input(
             "cmy",
-            &body_clone.cmy.to_string(),
-            crate::Message::BodyCmyInputChanged,
+            &body.cmy,
+            Message::BodyCmyInputChanged,
         ))
         .push(create_text_input(
             "cmz",
-            &body_clone.cmz.to_string(),
-            crate::Message::BodyCmzInputChanged,
+            &body.cmz,
+            Message::BodyCmzInputChanged,
         ))
         .push(create_text_input(
             "ixx",
-            &body_clone.ixx.to_string(),
-            crate::Message::BodyIxxInputChanged,
+            &body.ixx,
+            Message::BodyIxxInputChanged,
         ))
         .push(create_text_input(
             "iyy",
-            &body_clone.iyy.to_string(),
-            crate::Message::BodyIyyInputChanged,
+            &body.iyy,
+            Message::BodyIyyInputChanged,
         ))
         .push(create_text_input(
             "izz",
-            &body_clone.izz.to_string(),
-            crate::Message::BodyIzzInputChanged,
+            &body.izz,
+            Message::BodyIzzInputChanged,
         ))
         .push(create_text_input(
             "ixy",
-            &body_clone.ixy.to_string(),
-            crate::Message::BodyIxyInputChanged,
+            &body.ixy,
+            Message::BodyIxyInputChanged,
         ))
         .push(create_text_input(
             "ixz",
-            &body_clone.ixz.to_string(),
-            crate::Message::BodyIxzInputChanged,
+            &body.ixz,
+            Message::BodyIxzInputChanged,
         ))
         .push(create_text_input(
             "iyz",
-            &body_clone.iyz.to_string(),
-            crate::Message::BodyIyzInputChanged,
+            &body.iyz,
+            Message::BodyIyzInputChanged,
         ));
 
     let footer = Row::new()
@@ -875,12 +671,12 @@ fn create_body_modal(body: &Body) -> Element<Message, crate::ui::theme::Theme> {
         .push(
             button("Cancel")
                 .width(Length::Fill)
-                .on_press(crate::Message::CloseModal),
+                .on_press(Message::CloseModal),
         )
         .push(
             button("Ok")
                 .width(Length::Fill)
-                .on_press(crate::Message::SaveBody(body_clone.clone())),
+                .on_press(Message::SaveComponent),
         );
 
     card("Body Information", content)
@@ -889,12 +685,11 @@ fn create_body_modal(body: &Body) -> Element<Message, crate::ui::theme::Theme> {
         .into()
 }
 
-fn create_revolute_modal(joint: &Revolute) -> Element<Message, crate::ui::theme::Theme> {
-    let joint_clone = joint.clone();
+fn create_revolute_modal(joint: &DummyRevolute) -> Element<Message, crate::ui::theme::Theme> {    
     let content = Column::new().push(
-        text_input("name", &joint_clone.name)
+        text_input("name", &joint.name)
             .on_input(|string| crate::Message::RevoluteNameInputChanged(string))
-            .on_submit(Message::SaveRevolute(joint_clone.clone())),
+            .on_submit(Message::SaveComponent),
     );
 
     let footer = Row::new()
@@ -909,7 +704,7 @@ fn create_revolute_modal(joint: &Revolute) -> Element<Message, crate::ui::theme:
         .push(
             button("Ok")
                 .width(Length::Fill)
-                .on_press(crate::Message::SaveRevolute(joint_clone.clone())),
+                .on_press(crate::Message::SaveComponent),
         );
 
     card("Revolute Information", content)
@@ -918,92 +713,3 @@ fn create_revolute_modal(joint: &Revolute) -> Element<Message, crate::ui::theme:
         .into()
 }
 
-fn update_body_numeric_field<F>(state: &mut AppState, value: &str, update_fn: F)
-where
-    F: FnOnce(&mut Body, f64),
-{
-    if let Ok(float_value) = value.parse::<f64>() {
-        if let Some(add_body_node) = state.nodes.get_mut(&state.nodebar.map.body) {
-            if let Modals::Body(ref mut body) = add_body_node.modal {
-                update_fn(body, float_value);
-            }
-        }
-    }
-}
-
-fn update_body_name(state: &mut AppState, value: &str) {
-    if let Some(add_body_node) = state.nodes.get_mut(&state.nodebar.map.body) {
-        if let Modals::Body(ref mut body) = &mut add_body_node.modal {
-            body.name = value.to_string();
-        }
-    }
-}
-
-fn update_body_mass(state: &mut AppState, value: &str) {
-    update_body_numeric_field(state, value, |body, float_value| {
-        body.mass = float_value;
-    });
-}
-
-fn update_body_cmx(state: &mut AppState, value: &str) {
-    update_body_numeric_field(state, value, |body, float_value| {
-        body.cmx = float_value;
-    });
-}
-
-fn update_body_cmy(state: &mut AppState, value: &str) {
-    update_body_numeric_field(state, value, |body, float_value| {
-        body.cmy = float_value;
-    });
-}
-
-fn update_body_cmz(state: &mut AppState, value: &str) {
-    update_body_numeric_field(state, value, |body, float_value| {
-        body.cmz = float_value;
-    });
-}
-
-fn update_body_ixx(state: &mut AppState, value: &str) {
-    update_body_numeric_field(state, value, |body, float_value| {
-        body.ixx = float_value;
-    });
-}
-
-fn update_body_iyy(state: &mut AppState, value: &str) {
-    update_body_numeric_field(state, value, |body, float_value| {
-        body.iyy = float_value;
-    });
-}
-
-fn update_body_izz(state: &mut AppState, value: &str) {
-    update_body_numeric_field(state, value, |body, float_value| {
-        body.izz = float_value;
-    });
-}
-
-fn update_body_ixy(state: &mut AppState, value: &str) {
-    update_body_numeric_field(state, value, |body, float_value| {
-        body.ixy = float_value;
-    });
-}
-
-fn update_body_ixz(state: &mut AppState, value: &str) {
-    update_body_numeric_field(state, value, |body, float_value| {
-        body.ixz = float_value;
-    });
-}
-
-fn update_body_iyz(state: &mut AppState, value: &str) {
-    update_body_numeric_field(state, value, |body, float_value| {
-        body.iyz = float_value;
-    });
-}
-
-// Helper function to update the revolute name
-fn update_revolute_name(state: &mut AppState, value: &str) {
-    if let Some(add_joint_node) = state.nodes.get_mut(&state.nodebar.map.revolute) {
-        if let Modals::Revolute(ref mut joint_modal) = &mut add_joint_node.modal {
-            joint_modal.name = value.to_string();
-        }
-    }
-}

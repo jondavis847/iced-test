@@ -4,6 +4,21 @@ use super::{MultibodyMeta, MultibodyTrait};
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Copy)]
+pub enum BodyField {
+    Name,
+    Mass,
+    Cmx,
+    Cmy,
+    Cmz,
+    Ixx,
+    Iyy,
+    Izz,
+    Ixy,
+    Ixz,
+    Iyz,
+}
+
+#[derive(Debug, Clone, Copy)]
 pub struct Body {
     pub meta: MultibodyMeta,
     pub mass: f64,

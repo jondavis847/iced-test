@@ -7,6 +7,16 @@ use crate::ui::dummies::{DummyComponent, DummyRevolute, DummyTrait};
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Copy)]
+pub enum RevoluteField {
+    Name,
+    ConstantForce,
+    Dampening,
+    Omega,
+    SpringConstant,
+    Theta,
+}
+
+#[derive(Debug, Clone, Copy)]
 pub struct RevoluteState {
     pub theta: f64,
     pub omega: f64,

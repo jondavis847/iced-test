@@ -18,7 +18,7 @@ use std::time::{Duration, Instant};
 mod multibody;
 mod ui;
 
-use crate::multibody::MultibodyTrait;
+use crate::multibody::{body::BodyField,joints::revolute::RevoluteField, MultibodyTrait};
 use crate::ui::canvas::graph::{Graph, GraphMessage};
 use crate::ui::canvas::nodebar::{Nodebar, NodebarMessage};
 use crate::ui::canvas::GraphCanvas;
@@ -268,211 +268,48 @@ impl AppState {
         }
     }
 
-    fn update_body_name(&mut self, value: &str) -> Command<Message> {
+    pub fn update_body_field(&mut self, field: BodyField, value: &str) -> Command<Message> {
         if let Some(dummy_component) = self.nodebar.components.get_mut(&self.nodebar.map.body) {
             if let DummyComponent::Body(dummy_body) = dummy_component {
-                dummy_body.set_name(value);
+                match field {
+                    BodyField::Name => dummy_body.set_name(value),
+                    BodyField::Mass => dummy_body.mass = value.to_string(),
+                    BodyField::Cmx => dummy_body.cmx = value.to_string(),
+                    BodyField::Cmy => dummy_body.cmy = value.to_string(),
+                    BodyField::Cmz => dummy_body.cmz = value.to_string(),
+                    BodyField::Ixx => dummy_body.ixx = value.to_string(),
+                    BodyField::Iyy => dummy_body.iyy = value.to_string(),
+                    BodyField::Izz => dummy_body.izz = value.to_string(),
+                    BodyField::Ixy => dummy_body.ixy = value.to_string(),
+                    BodyField::Ixz => dummy_body.ixz = value.to_string(),
+                    BodyField::Iyz => dummy_body.iyz = value.to_string(),
+                }
             } else {
                 // Handle error: must be the dummy body
                 eprintln!("Error: Component is not a DummyBody");
             }
         }
         Command::none()
-    }
-    
-    fn update_body_mass(&mut self, value: &str) -> Command<Message> {
-        if let Some(dummy_component) = self.nodebar.components.get_mut(&self.nodebar.map.body) {
-            if let DummyComponent::Body(dummy_body) = dummy_component {
-                dummy_body.mass = value.to_string();
-            } else {
-                // Handle error: must be the dummy body
-                eprintln!("Error: Component is not a DummyBody");
-            }
-        }
-        Command::none()
-    }
-    
-    fn update_body_cmx(&mut self, value: &str) -> Command<Message> {
-        if let Some(dummy_component) = self.nodebar.components.get_mut(&self.nodebar.map.body) {
-            if let DummyComponent::Body(dummy_body) = dummy_component {
-                dummy_body.cmx = value.to_string();
-            } else {
-                // Handle error: must be the dummy body
-                eprintln!("Error: Component is not a DummyBody");
-            }
-        }
-        Command::none()
-    }
-    
-    fn update_body_cmy(&mut self, value: &str) -> Command<Message> {
-        if let Some(dummy_component) = self.nodebar.components.get_mut(&self.nodebar.map.body) {
-            if let DummyComponent::Body(dummy_body) = dummy_component {
-                dummy_body.cmy = value.to_string();
-            } else {
-                // Handle error: must be the dummy body
-                eprintln!("Error: Component is not a DummyBody");
-            }
-        }
-        Command::none()
-    }
-    
-    fn update_body_cmz(&mut self, value: &str) -> Command<Message> {
-        if let Some(dummy_component) = self.nodebar.components.get_mut(&self.nodebar.map.body) {
-            if let DummyComponent::Body(dummy_body) = dummy_component {
-                dummy_body.cmz = value.to_string();
-            } else {
-                // Handle error: must be the dummy body
-                eprintln!("Error: Component is not a DummyBody");
-            }
-        }
-        Command::none()
-    }
-    
-    fn update_body_ixx(&mut self, value: &str) -> Command<Message> {
-        if let Some(dummy_component) = self.nodebar.components.get_mut(&self.nodebar.map.body) {
-            if let DummyComponent::Body(dummy_body) = dummy_component {
-                dummy_body.ixx = value.to_string();
-            } else {
-                // Handle error: must be the dummy body
-                eprintln!("Error: Component is not a DummyBody");
-            }
-        }
-        Command::none()
-    }
-    
-    fn update_body_iyy(&mut self, value: &str) -> Command<Message> {
-        if let Some(dummy_component) = self.nodebar.components.get_mut(&self.nodebar.map.body) {
-            if let DummyComponent::Body(dummy_body) = dummy_component {
-                dummy_body.iyy = value.to_string();
-            } else {
-                // Handle error: must be the dummy body
-                eprintln!("Error: Component is not a DummyBody");
-            }
-        }
-        Command::none()
-    }
-    
-    fn update_body_izz(&mut self, value: &str) -> Command<Message> {
-        if let Some(dummy_component) = self.nodebar.components.get_mut(&self.nodebar.map.body) {
-            if let DummyComponent::Body(dummy_body) = dummy_component {
-                dummy_body.izz = value.to_string();
-            } else {
-                // Handle error: must be the dummy body
-                eprintln!("Error: Component is not a DummyBody");
-            }
-        }
-        Command::none()
-    }
-    
-    fn update_body_ixy(&mut self, value: &str) -> Command<Message> {
-        if let Some(dummy_component) = self.nodebar.components.get_mut(&self.nodebar.map.body) {
-            if let DummyComponent::Body(dummy_body) = dummy_component {
-                dummy_body.ixy = value.to_string();
-            } else {
-                // Handle error: must be the dummy body
-                eprintln!("Error: Component is not a DummyBody");
-            }
-        }
-        Command::none()
-    }
-    
-    fn update_body_ixz(&mut self, value: &str) -> Command<Message> {
-        if let Some(dummy_component) = self.nodebar.components.get_mut(&self.nodebar.map.body) {
-            if let DummyComponent::Body(dummy_body) = dummy_component {
-                dummy_body.ixz = value.to_string();
-            } else {
-                // Handle error: must be the dummy body
-                eprintln!("Error: Component is not a DummyBody");
-            }
-        }
-        Command::none()
-    }
-    
-    fn update_body_iyz(&mut self, value: &str) -> Command<Message> {
-        if let Some(dummy_component) = self.nodebar.components.get_mut(&self.nodebar.map.body) {
-            if let DummyComponent::Body(dummy_body) = dummy_component {
-                dummy_body.iyz = value.to_string();
-            } else {
-                // Handle error: must be the dummy body
-                eprintln!("Error: Component is not a DummyBody");
-            }
-        }
-        Command::none()
-    }
-    
-    fn update_revolute_constant_force(&mut self, value: &str) -> Command<Message> {
-        if let Some(dummy_component) = self.nodebar.components.get_mut(&self.nodebar.map.revolute) {
-            if let DummyComponent::Revolute(dummy_revolute) = dummy_component {
-                dummy_revolute.constant_force = value.to_string();
-            } else {
-                // Handle error: must be the dummy revolute
-                eprintln!("Error: Component is not a DummyRevolute");
-            }
-        }  
-        Command::none()  
     }
 
-    fn update_revolute_dampening(&mut self, value: &str) -> Command<Message> {
+    pub fn update_revolute_field(&mut self, field: RevoluteField, value: &str) -> Command<Message> {
         if let Some(dummy_component) = self.nodebar.components.get_mut(&self.nodebar.map.revolute) {
             if let DummyComponent::Revolute(dummy_revolute) = dummy_component {
-                dummy_revolute.dampening = value.to_string();
+                match field {
+                    RevoluteField::Name => dummy_revolute.set_name(value),
+                    RevoluteField::ConstantForce => dummy_revolute.constant_force = value.to_string(),
+                    RevoluteField::Dampening => dummy_revolute.dampening = value.to_string(),
+                    RevoluteField::Omega => dummy_revolute.omega = value.to_string(),
+                    RevoluteField::SpringConstant => dummy_revolute.spring_constant = value.to_string(),
+                    RevoluteField::Theta => dummy_revolute.theta = value.to_string(),
+                }
             } else {
                 // Handle error: must be the dummy revolute
                 eprintln!("Error: Component is not a DummyRevolute");
             }
-        }  
-        Command::none()  
+        }
+        Command::none()
     }
-
-    // Helper function to update the revolute name
-    fn update_revolute_name(&mut self, value: &str) -> Command<Message> {
-        if let Some(dummy_component) = self.nodebar.components.get_mut(&self.nodebar.map.revolute) {
-            if let DummyComponent::Revolute(dummy_revolute) = dummy_component {
-                dummy_revolute.set_name(value);
-            } else {
-                // Handle error: must be the dummy revolute
-                eprintln!("Error: Component is not a DummyRevolute");
-            }
-        }  
-        Command::none()  
-    }
-
-    fn update_revolute_omega(&mut self, value: &str) -> Command<Message> {
-        if let Some(dummy_component) = self.nodebar.components.get_mut(&self.nodebar.map.revolute) {
-            if let DummyComponent::Revolute(dummy_revolute) = dummy_component {
-                dummy_revolute.omega = value.to_string();
-            } else {
-                // Handle error: must be the dummy revolute
-                eprintln!("Error: Component is not a DummyRevolute");
-            }
-        }  
-        Command::none()  
-    }
-
-    fn update_revolute_spring_constant(&mut self, value: &str) -> Command<Message> {
-        if let Some(dummy_component) = self.nodebar.components.get_mut(&self.nodebar.map.revolute) {
-            if let DummyComponent::Revolute(dummy_revolute) = dummy_component {
-                dummy_revolute.spring_constant = value.to_string();
-            } else {
-                // Handle error: must be the dummy revolute
-                eprintln!("Error: Component is not a DummyRevolute");
-            }
-        }  
-        Command::none()  
-    }
-
-    fn update_revolute_theta(&mut self, value: &str) -> Command<Message> {
-        if let Some(dummy_component) = self.nodebar.components.get_mut(&self.nodebar.map.revolute) {
-            if let DummyComponent::Revolute(dummy_revolute) = dummy_component {
-                dummy_revolute.theta = value.to_string();
-            } else {
-                // Handle error: must be the dummy revolute
-                eprintln!("Error: Component is not a DummyRevolute");
-            }
-        }  
-        Command::none()  
-    }
-    
 
     fn window_resized(&mut self, window_size: Size) -> Command<Message> {
         let graph_size = Size::new(
@@ -525,23 +362,23 @@ impl Application for IcedTest {
             IcedTest::Loaded(state) => match message {
                 Message::FontLoaded(_) => Command::none(),
                 Message::Loaded(_) => Command::none(),
-                Message::BodyNameInputChanged(value) => state.update_body_name(&value),
-                Message::BodyMassInputChanged(value) => state.update_body_mass( &value),
-                Message::BodyCmxInputChanged(value) => state.update_body_cmx( &value),
-                Message::BodyCmyInputChanged(value) => state.update_body_cmy( &value),
-                Message::BodyCmzInputChanged(value) => state.update_body_cmz( &value),
-                Message::BodyIxxInputChanged(value) => state.update_body_ixx( &value),
-                Message::BodyIyyInputChanged(value) => state.update_body_iyy( &value),
-                Message::BodyIzzInputChanged(value) => state.update_body_izz( &value),
-                Message::BodyIxyInputChanged(value) => state.update_body_ixy( &value),
-                Message::BodyIxzInputChanged(value) => state.update_body_ixz( &value),
-                Message::BodyIyzInputChanged(value) => state.update_body_iyz( &value),
-                Message::RevoluteConstantForceInputChanged(value) => state.update_revolute_constant_force( &value),
-                Message::RevoluteDampeningInputChanged(value) => state.update_revolute_dampening( &value),
-                Message::RevoluteNameInputChanged(value) => state.update_revolute_name( &value),
-                Message::RevoluteOmegaInputChanged(value) => state.update_revolute_omega( &value),
-                Message::RevoluteSpringConstantInputChanged(value) => state.update_revolute_spring_constant( &value),
-                Message::RevoluteThetaInputChanged(value) => state.update_revolute_theta( &value),
+                Message::BodyNameInputChanged(value) => state.update_body_field(BodyField::Name,&value),
+                Message::BodyMassInputChanged(value) => state.update_body_field(BodyField::Mass,&value),
+                Message::BodyCmxInputChanged(value) => state.update_body_field(BodyField::Cmx,&value),
+                Message::BodyCmyInputChanged(value) => state.update_body_field(BodyField::Cmy,&value),
+                Message::BodyCmzInputChanged(value) => state.update_body_field(BodyField::Cmz,&value),
+                Message::BodyIxxInputChanged(value) => state.update_body_field(BodyField::Ixx,&value),
+                Message::BodyIyyInputChanged(value) => state.update_body_field(BodyField::Iyy,&value),
+                Message::BodyIzzInputChanged(value) => state.update_body_field(BodyField::Izz,&value),
+                Message::BodyIxyInputChanged(value) => state.update_body_field(BodyField::Ixy,&value),
+                Message::BodyIxzInputChanged(value) => state.update_body_field(BodyField::Ixz,&value),
+                Message::BodyIyzInputChanged(value) => state.update_body_field(BodyField::Iyz,&value),
+                Message::RevoluteConstantForceInputChanged(value) => state.update_revolute_field(RevoluteField::ConstantForce, &value),
+                Message::RevoluteDampeningInputChanged(value) => state.update_revolute_field(RevoluteField::Dampening, &value),
+                Message::RevoluteNameInputChanged(value) => state.update_revolute_field(RevoluteField::Name, &value),
+                Message::RevoluteOmegaInputChanged(value) => state.update_revolute_field(RevoluteField::Omega, &value),
+                Message::RevoluteSpringConstantInputChanged(value) => state.update_revolute_field(RevoluteField::SpringConstant, &value),
+                Message::RevoluteThetaInputChanged(value) => state.update_revolute_field(RevoluteField::Theta, &value),
                 Message::LeftButtonPressed(cursor) => state.left_button_pressed(cursor),
                 Message::LeftButtonReleased(cursor) => state.left_button_released(cursor),
                 Message::RightButtonPressed(cursor) => state.right_button_pressed(cursor),

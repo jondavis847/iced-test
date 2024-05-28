@@ -1,19 +1,55 @@
-use crate::multibody::{connection::JointConnection, joints::JointTrait,  MultibodyMeta, MultibodyTrait};
+use crate::multibody::{
+    connection::JointConnection,
+    joints::{JointParameters, JointTrait},
+    MultibodyMeta, MultibodyTrait,
+};
+use crate::ui::dummies::{DummyComponent, DummyRevolute, DummyTrait};
 use uuid::Uuid;
-use crate::ui::dummies::{DummyComponent,DummyRevolute, DummyTrait};
+
+#[derive(Debug, Clone, Copy)]
+pub struct RevoluteState {
+    pub theta: f64,
+    pub omega: f64,
+}
+
+impl RevoluteState {
+    pub fn new(theta: f64, omega: f64) -> Self {
+        Self { theta, omega }
+    }
+}
 
 #[derive(Debug, Clone, Copy)]
 pub struct Revolute {
-    pub meta: MultibodyMeta,    
     connection: JointConnection,
+    pub meta: MultibodyMeta,
+    pub parameters: JointParameters,
+    pub state: RevoluteState,
 }
 
 impl Revolute {
-    pub fn from_dummy(component_id: Uuid, node_id: Uuid, name_id: Uuid, dummy: &DummyRevolute) -> Self {
+    pub fn from_dummy(
+        component_id: Uuid,
+        node_id: Uuid,
+        name_id: Uuid,
+        dummy: &DummyRevolute,
+    ) -> Self {
         let meta = MultibodyMeta::new(component_id, dummy.get_id(), name_id, node_id);
+
+        let state = RevoluteState::new(
+            dummy.theta.parse().unwrap_or(0.0),
+            dummy.omega.parse().unwrap_or(0.0),
+        );
+        let parameters = JointParameters::new(
+            dummy.constant_force.parse().unwrap_or(0.0),
+            dummy.dampening.parse().unwrap_or(0.0),
+            dummy.spring_constant.parse().unwrap_or(0.0),
+        );
+
         Self {
-            meta: meta,
             connection: JointConnection::default(),
+            meta: meta,
+            parameters: parameters,
+            state: state,
         }
     }
 }
@@ -37,7 +73,7 @@ impl JointTrait for Revolute {
 impl MultibodyTrait for Revolute {
     fn get_component_id(&self) -> &Uuid {
         &self.meta.component_id
-    }    
+    }
 
     fn get_dummy_id(&self) -> &Uuid {
         &self.meta.dummy_id
@@ -53,8 +89,7 @@ impl MultibodyTrait for Revolute {
 
     fn inherit_from(&mut self, dummy: &DummyComponent) {
         match dummy {
-            DummyComponent::Revolute(_) => {                
-            }
+            DummyComponent::Revolute(_) => {}
             _ => {} // error! must be dummy base
         }
     }
@@ -66,12 +101,8 @@ impl MultibodyTrait for Revolute {
     fn set_name_id(&mut self, id: &Uuid) {
         self.meta.name_id = *id;
     }
-    
+
     fn set_node_id(&mut self, id: &Uuid) {
         self.meta.node_id = *id;
     }
-    
 }
-
-
-

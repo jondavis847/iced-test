@@ -44,8 +44,13 @@ enum Message {
     BodyIzzInputChanged(String),
     BodyIxyInputChanged(String),
     BodyIxzInputChanged(String),
-    BodyIyzInputChanged(String),
+    BodyIyzInputChanged(String),    
+    RevoluteConstantForceInputChanged(String),
+    RevoluteDampeningInputChanged(String),
+    RevoluteOmegaInputChanged(String),
     RevoluteNameInputChanged(String),
+    RevoluteSpringConstantInputChanged(String),
+    RevoluteThetaInputChanged(String),    
     LeftButtonPressed(Cursor),
     LeftButtonReleased(Cursor),
     RightButtonPressed(Cursor),
@@ -395,11 +400,71 @@ impl AppState {
         Command::none()
     }
     
+    fn update_revolute_constant_force(&mut self, value: &str) -> Command<Message> {
+        if let Some(dummy_component) = self.nodebar.components.get_mut(&self.nodebar.map.revolute) {
+            if let DummyComponent::Revolute(dummy_revolute) = dummy_component {
+                dummy_revolute.constant_force = value.to_string();
+            } else {
+                // Handle error: must be the dummy revolute
+                eprintln!("Error: Component is not a DummyRevolute");
+            }
+        }  
+        Command::none()  
+    }
+
+    fn update_revolute_dampening(&mut self, value: &str) -> Command<Message> {
+        if let Some(dummy_component) = self.nodebar.components.get_mut(&self.nodebar.map.revolute) {
+            if let DummyComponent::Revolute(dummy_revolute) = dummy_component {
+                dummy_revolute.dampening = value.to_string();
+            } else {
+                // Handle error: must be the dummy revolute
+                eprintln!("Error: Component is not a DummyRevolute");
+            }
+        }  
+        Command::none()  
+    }
+
     // Helper function to update the revolute name
     fn update_revolute_name(&mut self, value: &str) -> Command<Message> {
         if let Some(dummy_component) = self.nodebar.components.get_mut(&self.nodebar.map.revolute) {
             if let DummyComponent::Revolute(dummy_revolute) = dummy_component {
                 dummy_revolute.set_name(value);
+            } else {
+                // Handle error: must be the dummy revolute
+                eprintln!("Error: Component is not a DummyRevolute");
+            }
+        }  
+        Command::none()  
+    }
+
+    fn update_revolute_omega(&mut self, value: &str) -> Command<Message> {
+        if let Some(dummy_component) = self.nodebar.components.get_mut(&self.nodebar.map.revolute) {
+            if let DummyComponent::Revolute(dummy_revolute) = dummy_component {
+                dummy_revolute.omega = value.to_string();
+            } else {
+                // Handle error: must be the dummy revolute
+                eprintln!("Error: Component is not a DummyRevolute");
+            }
+        }  
+        Command::none()  
+    }
+
+    fn update_revolute_spring_constant(&mut self, value: &str) -> Command<Message> {
+        if let Some(dummy_component) = self.nodebar.components.get_mut(&self.nodebar.map.revolute) {
+            if let DummyComponent::Revolute(dummy_revolute) = dummy_component {
+                dummy_revolute.spring_constant = value.to_string();
+            } else {
+                // Handle error: must be the dummy revolute
+                eprintln!("Error: Component is not a DummyRevolute");
+            }
+        }  
+        Command::none()  
+    }
+
+    fn update_revolute_theta(&mut self, value: &str) -> Command<Message> {
+        if let Some(dummy_component) = self.nodebar.components.get_mut(&self.nodebar.map.revolute) {
+            if let DummyComponent::Revolute(dummy_revolute) = dummy_component {
+                dummy_revolute.theta = value.to_string();
             } else {
                 // Handle error: must be the dummy revolute
                 eprintln!("Error: Component is not a DummyRevolute");
@@ -471,7 +536,12 @@ impl Application for IcedTest {
                 Message::BodyIxyInputChanged(value) => state.update_body_ixy( &value),
                 Message::BodyIxzInputChanged(value) => state.update_body_ixz( &value),
                 Message::BodyIyzInputChanged(value) => state.update_body_iyz( &value),
+                Message::RevoluteConstantForceInputChanged(value) => state.update_revolute_constant_force( &value),
+                Message::RevoluteDampeningInputChanged(value) => state.update_revolute_dampening( &value),
                 Message::RevoluteNameInputChanged(value) => state.update_revolute_name( &value),
+                Message::RevoluteOmegaInputChanged(value) => state.update_revolute_omega( &value),
+                Message::RevoluteSpringConstantInputChanged(value) => state.update_revolute_spring_constant( &value),
+                Message::RevoluteThetaInputChanged(value) => state.update_revolute_theta( &value),
                 Message::LeftButtonPressed(cursor) => state.left_button_pressed(cursor),
                 Message::LeftButtonReleased(cursor) => state.left_button_released(cursor),
                 Message::RightButtonPressed(cursor) => state.right_button_pressed(cursor),
@@ -680,12 +750,51 @@ fn create_body_modal(body: &DummyBody) -> Element<Message, crate::ui::theme::The
 }
 
 fn create_revolute_modal(joint: &DummyRevolute) -> Element<Message, crate::ui::theme::Theme> {    
-    let content = Column::new().push(
-        text_input("name", &joint.name)
-            .on_input(|string| crate::Message::RevoluteNameInputChanged(string))
-            .on_submit(Message::SaveComponent),
-    );
+    let create_text_input = |label: &str, value: &str, on_input: fn(String) -> Message| {
+        Row::new()
+            .spacing(10)
+            .push(text(label).width(Length::FillPortion(1)))
+            .push(
+                text_input(label, value)
+                    .on_input(on_input)
+                    .on_submit(Message::SaveComponent)
+                    .width(Length::FillPortion(2)),
+            )
+            .width(Length::Fill)
+    };
 
+    let content = Column::new()
+        .push(create_text_input(
+            "name",
+            &joint.name,
+            Message::RevoluteNameInputChanged,
+        ))
+        .push(create_text_input(
+            "theta",
+            &joint.theta,
+            Message::RevoluteThetaInputChanged,
+        ))
+        .push(create_text_input(
+            "omega",
+            &joint.omega,
+            Message::RevoluteOmegaInputChanged,
+        ))
+        .push(create_text_input(
+            "constant force",
+            &joint.constant_force,
+            Message::RevoluteConstantForceInputChanged,
+        ))
+        .push(create_text_input(
+            "dampening",
+            &joint.dampening,
+            Message::RevoluteDampeningInputChanged,
+        ))
+        .push(create_text_input(
+            "spring constant",
+            &joint.theta,
+            Message::RevoluteSpringConstantInputChanged,
+        ));
+    
     let footer = Row::new()
         .spacing(10)
         .padding(5)

@@ -186,8 +186,13 @@ impl DummyTrait for DummyBody {
 
 #[derive(Default, Debug, Clone)]
 pub struct DummyRevolute {
+    pub constant_force: String,
+    pub dampening: String,
     id: Uuid,
     pub name: String,
+    pub omega: String,
+    pub spring_constant: String,
+    pub theta: String,    
 }
 
 impl DummyRevolute {
@@ -216,10 +221,15 @@ impl DummyTrait for DummyRevolute {
         if let Some(component) = graph.components.get(component_id) {
             match component {
                 MultibodyComponent::Joint(joint) => match joint {
-                    Joint::Revolute(_) => {
+                    Joint::Revolute(revolute) => {
                         if let Some(name) = graph.names.get(&component.get_name_id()) {
                             self.set_name(name);
-                        }                        
+                        }        
+                        self.theta = revolute.state.theta.to_string();
+                        self.omega = revolute.state.omega.to_string();
+                        self.spring_constant = revolute.parameters.spring_constant.to_string();
+                        self.dampening = revolute.parameters.dampening.to_string();
+                        self.constant_force = revolute.parameters.constant_force.to_string();                
                     }
                     //_ => {} //TODO: error! must be a revolute
                 }

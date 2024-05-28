@@ -420,6 +420,7 @@ impl AppState {
             window_size.height,
         );
         self.nodebar.window_resized(nodebar_size);
+        self.cache.clear();
         Command::none()
     }
 }

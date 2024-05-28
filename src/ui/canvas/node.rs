@@ -136,11 +136,3 @@ impl Node {
         }       
     }    
 }
-
-#[derive(Debug, Clone)]
-pub struct GraphNode {
-    pub component: Uuid,
-    pub edges: Vec<Uuid>,
-    pub node: Node,
-}
-

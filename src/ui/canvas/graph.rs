@@ -374,6 +374,7 @@ impl Graph {
                 }
             } else {
                 self.edges.remove(&edge_id);
+
             }
         }
     

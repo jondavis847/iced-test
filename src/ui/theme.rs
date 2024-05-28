@@ -11,8 +11,9 @@ macro_rules! color {
 }
 
 #[derive(Debug)]
-pub struct Theme {    
-    pub background: Color,    
+pub struct Theme {
+    pub background: Color,
+    pub error: Color,
     pub node_background: Color,
     pub text_background: Color,
     pub text: Color,
@@ -24,8 +25,9 @@ pub struct Theme {
 }
 
 impl Theme {
-    pub const ORANGE: Self = Self {        
-        background: color!(37, 37, 38),        
+    pub const ORANGE: Self = Self {
+        background: color!(37, 37, 38),
+        error: color!(255,0,0),
         node_background: color!(30, 30, 31),
         text_background: color!(47, 47, 48),
         text: color!(204, 204, 200),
@@ -34,7 +36,7 @@ impl Theme {
         shadow: color!(37, 36, 34),
         //primary: color!(235, 161, 66),
         //highlight: color!(212, 207, 40),
-        primary: color!(235/2, 161/2, 66/2),
+        primary: color!(235 / 2, 161 / 2, 66 / 2),
         highlight: color!(235, 161, 66),
     };
 }
@@ -65,33 +67,29 @@ impl iced::application::StyleSheet for Theme {
 }
 
 impl iced::widget::container::StyleSheet for Theme {
-    type Style = Application;
-    fn appearance(&self, style: &Self::Style) -> iced::widget::container::Appearance {
-        match style {
-            Application::Default => {
-                let mut border = iced::Border::with_radius(2.0);
-                border.color = self.border;
-                border.width = 2.0;
+    type Style = ();
+    fn appearance(&self, _style: &Self::Style) -> iced::widget::container::Appearance {
+        let mut border = iced::Border::with_radius(2.0);
+        border.color = self.border;
+        border.width = 2.0;
 
-                let shadow = iced::Shadow {
-                    color: self.shadow,
-                    offset: iced::Vector::new(3.0, 3.0),
-                    blur_radius: 4.0,
-                };
+        let shadow = iced::Shadow {
+            color: self.shadow,
+            offset: iced::Vector::new(3.0, 3.0),
+            blur_radius: 4.0,
+        };
 
-                iced::widget::container::Appearance {
-                    text_color: None,
-                    background: Some(self.background.into()),
-                    border: border,
-                    shadow: shadow,
-                }
-            }
+        iced::widget::container::Appearance {
+            text_color: None,
+            background: Some(self.background.into()),
+            border: border,
+            shadow: shadow,
         }
     }
 }
 
 impl iced::widget::text::StyleSheet for Theme {
-    type Style = Application;
+    type Style = ();
 
     fn appearance(&self, _style: Self::Style) -> iced::widget::text::Appearance {
         iced::widget::text::Appearance {
@@ -101,7 +99,7 @@ impl iced::widget::text::StyleSheet for Theme {
 }
 
 impl iced::widget::button::StyleSheet for Theme {
-    type Style = Application;
+    type Style = ();
 
     fn active(&self, _style: &Self::Style) -> iced::widget::button::Appearance {
         iced::widget::button::Appearance {
@@ -112,16 +110,34 @@ impl iced::widget::button::StyleSheet for Theme {
     }
 }
 
-impl iced_aw::style::card::StyleSheet for Theme {
-    type Style = Application;
+#[derive(Debug, Clone, Copy, Default)]
+pub enum Card {
+    #[default]
+    Default,
+    Error,
+}
 
-    fn active(&self, _style: &Self::Style) -> iced_aw::style::card::Appearance {
-        iced_aw::style::card::Appearance {
-            background: iced::Background::Color(self.background),
-            head_background: iced::Background::Color(self.node_background),
-            head_text_color: self.primary,
-            border_color: self.border,
-            ..iced_aw::style::card::Appearance::default()
+impl iced_aw::style::card::StyleSheet for Theme {
+    type Style = Card;
+
+    fn active(&self, style: &Self::Style) -> iced_aw::style::card::Appearance {
+        match style {
+            Card::Default => iced_aw::style::card::Appearance {
+                background: iced::Background::Color(self.background),
+                head_background: iced::Background::Color(self.node_background),
+                head_text_color: self.primary,
+                border_color: self.border,
+                ..iced_aw::style::card::Appearance::default()
+            },
+            Card::Error => {
+                iced_aw::style::card::Appearance {
+                    background: iced::Background::Color(self.background),
+                    head_background: iced::Background::Color(self.error),
+                    head_text_color: self.error,
+                    border_color: self.border,
+                    ..iced_aw::style::card::Appearance::default()
+                }
+            }
         }
     }
 }

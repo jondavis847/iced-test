@@ -1196,8 +1196,10 @@ dependencies = [
  "criterion",
  "iced",
  "iced_aw",
+ "indexmap",
  "lyon_geom",
  "lyon_path",
+ "rustc-hash",
  "uuid",
 ]
 

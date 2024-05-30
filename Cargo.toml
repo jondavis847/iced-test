@@ -9,8 +9,10 @@ edition = "2021"
 criterion = "0.5.1"
 iced = {version = "0.12.1", features=["canvas"]}
 iced_aw = { version = "0.9.3", features = ["modal", "card", "floating_element"] }
+indexmap = "2.2.6"
 lyon_geom = "1.0.5"
 lyon_path = "1.0.5"
+rustc-hash = "1.1.0"
 uuid = { version = "1.8.0", features = ["v4"] }
 
 [[bench]]

@@ -1,15 +1,25 @@
-use iced::{mouse::Cursor, Point, Rectangle, Size};
+use iced::{mouse::Cursor, Command, Point, Rectangle, Size};
 use std::collections::HashMap;
 use uuid::Uuid;
 
 use super::edge::{Edge, EdgeConnection};
 use super::node::Node;
-use crate::multibody::{joints::{Joint, JointTrait}, MultibodyComponent, MultibodyTrait};
+use crate::multibody::{
+    joints::Joint,
+    MultibodyComponent, MultibodyTrait,
+};
 use crate::ui::dummies::{DummyComponent, DummyTrait};
+use crate::Message;
 use crate::{MouseButton, MouseButtonReleaseEvents};
 
 pub enum GraphMessage {
     EditComponent(Uuid),
+    ErrorBodyMissingFrom(Uuid),
+    ErrorNoBase,
+    ErrorNoBaseConnections,
+    ErrorJointMissingFrom(Uuid),
+    ErrorJointMissingTo(Uuid),
+    ErrorJointNoOuterBody(Uuid),
 }
 
 #[derive(Debug, Clone)]
@@ -66,10 +76,86 @@ impl Default for Graph {
 }
 
 impl Graph {
+    pub fn create_multibody_system(&mut self) -> Option<GraphMessage> {
+        let mut body_counter = 0;
+        let mut joint_counter = 0;
+
+        let mut base = None;
+        let mut base_joints = Vec::new();
+        //let mut joints = Vec::new();
+        //let mut bodies = Vec::new();
+
+        // verify at least 1 base
+        for (id, component) in &self.components {
+            match component {
+                MultibodyComponent::Base(_) => base = Some(id),
+                _ => {}
+            }
+        }
+        if base.is_none() {
+            return Some(GraphMessage::ErrorNoBase);
+        }
+
+        let base_id = base.unwrap();
+
+        for (id, component) in &self.components {
+            match component {
+                MultibodyComponent::Joint(joint) => {
+
+                    // ensure all joints have a from id
+                    let from_id = match joint.get_from_id() {
+                        Some(id) => id,
+                        None => return Some(GraphMessage::ErrorJointMissingFrom(*id)),
+                    };
+
+                    // ensure all joints have a to id
+                    match joint.get_to_id() {
+                        Some(id) => id,
+                        None => return Some(GraphMessage::ErrorJointMissingTo(*id)),
+                    };
+
+                    // if the from id equals the base id, the joint is connected to the base
+                    if from_id == *base_id {
+                        base_joints.push(*id);
+                    }
+                }
+                MultibodyComponent::Body(body) => {
+                    // ensure all bodies have a from id
+                    match body.get_from_id() {
+                        Some(_) => {},
+                        None => return Some(GraphMessage::ErrorBodyMissingFrom(*id)),
+                    };
+                }
+                _=> {}
+            }
+        }
+
+        // verify something is connected to the base
+        if base_joints.is_empty() {
+            return Some(GraphMessage::ErrorNoBaseConnections)
+        }
+
+        for joint_id in base_joints {
+            // unwrap should be safe since we checked in the previous loop
+            let joint = self.components.get_mut(&joint_id).unwrap(); 
+            joint.set_system_id(joint_counter);
+            joint_counter += 1;
+            let outer_body_id = joint.get_to_id().unwrap();                        
+            let outer_body = match self.components.get_mut(&outer_body_id) {
+                Some(body) => body,
+                None => return Some(GraphMessage::ErrorJointNoOuterBody(joint_id))
+            };
+            outer_body.set_system_id(body_counter);
+            body_counter += 1;
+            
+        }
+        None
+    }
+
     pub fn cursor_moved(&mut self, cursor: Cursor) -> bool {
         let mut redraw = false;
         let cursor_position = cursor.position_in(self.bounds);
-    
+
         // Handle left-clicked node dragging
         if let Some(clicked_node_id) = self.left_clicked_node {
             if let Some(graphnode) = self.nodes.get_mut(&clicked_node_id) {
@@ -78,7 +164,7 @@ impl Graph {
                     redraw = true;
                 }
             }
-        } else if self.is_clicked {            
+        } else if self.is_clicked {
             // Handle graph translating
             if let Some(graph_cursor_position) = cursor_position {
                 if let Some(last_position) = self.last_cursor_position {
@@ -90,11 +176,11 @@ impl Graph {
                 }
             }
         }
-    
+
         // Update last cursor position
         if let Some(position) = cursor_position {
             self.last_cursor_position = Some(position);
-    
+
             // Handle right-clicked node for edge drawing
             if let Some(clicked_node_id) = self.right_clicked_node {
                 if let Some(edge_id) = self.current_edge {
@@ -109,17 +195,16 @@ impl Graph {
                     let new_edge_id = Uuid::new_v4();
                     self.edges.insert(new_edge_id, new_edge);
                     self.current_edge = Some(new_edge_id);
-    
+
                     // Add the edge to the from node
                     if let Some(from_node) = self.nodes.get_mut(&clicked_node_id) {
                         from_node.edges.push(new_edge_id);
-
                     }
                 }
                 redraw = true;
             }
         }
-    
+
         redraw
     }
 
@@ -146,18 +231,16 @@ impl Graph {
         }
     }
 
-    pub fn edit_component(&mut self, dummy: &DummyComponent, component_id: &Uuid) {        
-        let name_id = {
-            if let Some(component) = self.components.get(component_id) {
-                component.get_name_id() 
-            } else {
-                // If the component does not exist, return early
-                return;
-            }
-        };    
-        
+    pub fn edit_component(&mut self, dummy: &DummyComponent, component_id: &Uuid) {
+        let component = match self.components.get(component_id) {
+            Some(component) => component,
+            None => return,
+        };
+
+        let name_id = component.get_name_id();
+
         // set the name here since name exists in self.name rather than the component
-        self.set_name(&name_id, dummy.get_name());            
+        self.set_name(&name_id, dummy.get_name());
         if let Some(component) = self.components.get_mut(component_id) {
             component.inherit_from(dummy);
         }
@@ -310,78 +393,124 @@ impl Graph {
         }
     }
 
+    /// Handles the release of the right mouse button, finalizing or canceling an edge creation process.
+    ///
+    /// This function checks if there is an active edge creation process (stored in `self.current_edge`).
+    /// If there is, it attempts to finalize the edge by connecting it to a node near the cursor.
+    /// If any step in this process fails, it gracefully exits by removing the edge and resetting the state.
+    ///
+    /// # Arguments
+    ///
+    /// * `cursor` - The current position of the cursor.
     pub fn right_button_released(&mut self, cursor: Cursor) {
-        if let Some(edge_id) = self.current_edge {
-            let to_node_id = match self.get_snappable_node(cursor) {
-                Some(id) => id,
-                None => {
-                    self.edges.remove(&edge_id);
-                    self.current_edge = None;
-                    self.right_clicked_node = None;
-                    return;
-                }
-            };
-    
-            let to_node_component_id = match self.nodes.get(&to_node_id).map(|node| node.component_id) {
-                Some(id) => id,
-                None => {
-                    self.edges.remove(&edge_id);
-                    self.current_edge = None;
-                    self.right_clicked_node = None;
-                    return;
-                }
-            };
-    
-            let valid_connection = match self.edges.get(&edge_id) {
-                Some(active_edge) => match active_edge.from {
-                    EdgeConnection::Node(from_node_id) => self.nodes.get(&from_node_id).map_or(false, |from_node| {
-                        self.is_valid_connection(&from_node.component_id, &to_node_component_id)
-                    }),
-                    EdgeConnection::Point(_) => false,
-                },
-                None => false,
-            };
-    
-            if valid_connection {
-                if let Some(active_edge) = self.edges.get_mut(&edge_id) {
-                    if let EdgeConnection::Node(from_node_id) = active_edge.from {
-                        if let Some(to_node) = self.nodes.get_mut(&to_node_id) {
-                            to_node.edges.push(edge_id);
-                            active_edge.to = EdgeConnection::Node(to_node_id);
-    
-                            // Connect the components
-                            if let Some(from_node) = self.nodes.get(&from_node_id) {
-                                if let Some(from_component) = self.components.get_mut(&from_node.component_id) {
-                                    match from_component {
-                                        MultibodyComponent::Joint(joint) => joint.connect_from(to_node_id),
-                                        _ => {}
-                                        // Add other component types if necessary
-                                    }
-                                }
-                            }
-    
-                            if let Some(to_node) = self.nodes.get(&to_node_id) {
-                                if let Some(to_component) = self.components.get_mut(&to_node.component_id) {
-                                    match to_component {
-                                        MultibodyComponent::Joint(joint) => joint.connect_to(from_node_id),
-                                        _ => {}
-                                        // Add other component types if necessary
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            } else {
-                self.edges.remove(&edge_id);
+        // Get the current edge ID if it exists, return if it does not
+        let edge_id = match self.current_edge {
+            Some(id) => id,
+            None => return,
+        };
 
+        // Helper function to clean up in case anything goes wrong
+        let graceful_exit = |graph: &mut Self| {
+            graph.edges.remove(&edge_id);
+            graph.current_edge = None;
+            graph.right_clicked_node = None;
+        };
+
+        // Get the edge if it exists, return if it does not
+        let edge = match self.edges.get(&edge_id) {
+            Some(edge) => edge,
+            None => {
+                graceful_exit(self);
+                return;
             }
+        };
+
+        // Get the from_node_id, return if it is an EdgeConnection::Point
+        let from_node_id = match edge.from {
+            EdgeConnection::Node(id) => id,
+            _ => {
+                graceful_exit(self);
+                return;
+            }
+        };
+
+        // Get the component ID of the from node, return if it does not exist
+        let from_component_id = match self.nodes.get(&from_node_id).map(|node| node.component_id) {
+            Some(id) => id,
+            None => {
+                graceful_exit(self);
+                return;
+            }
+        };
+
+        // Attempt to get the snappable node near the cursor, return if it does not exist
+        let to_node_id = match self.get_snappable_node(cursor) {
+            Some(id) => id,
+            None => {
+                graceful_exit(self);
+                return;
+            }
+        };
+
+        // Get the component ID of the to node, return if it does not exist
+        let to_component_id = match self.nodes.get(&to_node_id).map(|node| node.component_id) {
+            Some(id) => id,
+            None => {
+                graceful_exit(self);
+                return;
+            }
+        };
+
+        // Check if the connection is valid between the from and to components
+        let valid_connection = self.is_valid_connection(&from_component_id, &to_component_id);
+
+        // Connect the components if the connection is valid
+        if valid_connection {
+            // Get the from component, return if it does not exist
+            let from_component = match self.components.get_mut(&from_component_id) {
+                Some(component) => component,
+                None => {
+                    graceful_exit(self);
+                    return;
+                }
+            };
+            from_component.connect_to(to_component_id);
+
+            // Get the to component, return if it does not exist
+            let to_component = match self.components.get_mut(&to_component_id) {
+                Some(component) => component,
+                None => {
+                    graceful_exit(self);
+                    return;
+                }
+            };
+            to_component.connect_from(from_component_id);
+
+            // Get the to node, return if it does not exist
+            let to_node = match self.nodes.get_mut(&to_node_id) {
+                Some(node) => node,
+                None => {
+                    graceful_exit(self);
+                    return;
+                }
+            };
+            to_node.edges.push(edge_id);
+
+            // Update the edge to connect to the to_node, return if the edge does not exist
+            let edge = match self.edges.get_mut(&edge_id) {
+                Some(edge) => edge,
+                None => {
+                    graceful_exit(self);
+                    return;
+                }
+            };
+            edge.to = EdgeConnection::Node(to_node_id);
         }
-    
+
+        // Clear the current edge and right-clicked node state
         self.current_edge = None;
-        self.right_clicked_node = None;        
+        self.right_clicked_node = None;
     }
-    
 
     pub fn save_component(&mut self, dummy: &DummyComponent) {
         // only do this if we can save the node
@@ -415,8 +544,8 @@ impl Graph {
         }
     }
 
-    fn set_name(&mut self,name_id: &Uuid, name: &str) {        
-        self.names.insert(*name_id,name.to_string());
+    fn set_name(&mut self, name_id: &Uuid, name: &str) {
+        self.names.insert(*name_id, name.to_string());
     }
 
     pub fn window_resized(&mut self, size: Size) {

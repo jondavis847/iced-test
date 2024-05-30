@@ -5,13 +5,6 @@ pub mod revolute;
 use crate::ui::dummies::DummyComponent;
 use revolute::Revolute;
 
-pub trait JointTrait {
-    fn connect_from(&mut self, from_id: Uuid);
-    fn connect_to(&mut self, to_id: Uuid);
-    fn delete_from(&mut self);
-    fn delete_to(&mut self);
-}
-
 #[derive(Debug, Clone, Copy)]
 pub enum Joint {
     //Floating,
@@ -20,7 +13,7 @@ pub enum Joint {
     //Spherical,
 }
 
-impl JointTrait for Joint {
+impl MultibodyTrait for Joint {
     fn connect_from(&mut self, from_id: Uuid) {
         match self {
             Joint::Revolute(joint) => joint.connect_from(from_id),
@@ -43,18 +36,22 @@ impl JointTrait for Joint {
             Joint::Revolute(joint) => joint.delete_to(),
         }
     }
-}
 
-impl MultibodyTrait for Joint {
-    fn get_component_id(&self) -> &Uuid {
+    fn get_component_id(&self) -> Uuid {
         match self {
             Joint::Revolute(revolute) => revolute.get_component_id(),
         }
     }
 
-    fn get_dummy_id(&self) -> &Uuid {
+    fn get_dummy_id(&self) -> Uuid {
         match self {
             Joint::Revolute(revolute) => revolute.get_dummy_id(),
+        }
+    }
+
+    fn get_from_id(&self) -> Option<Uuid> {
+        match self {
+            Joint::Revolute(revolute) => revolute.get_from_id(),
         }
     }
 
@@ -64,9 +61,15 @@ impl MultibodyTrait for Joint {
         }
     }
 
-    fn get_node_id(&self) -> &Uuid {
+    fn get_node_id(&self) -> Uuid {
         match self {
             Joint::Revolute(revolute) => revolute.get_node_id(),
+        }
+    }
+
+    fn get_to_id(&self) -> Option<Uuid> {
+        match self {
+            Joint::Revolute(revolute) => revolute.get_to_id(),
         }
     }
 
@@ -75,21 +78,27 @@ impl MultibodyTrait for Joint {
             Joint::Revolute(joint) => joint.inherit_from(dummy),
         }
     }
-    fn set_component_id(&mut self, id: &Uuid) {
+    fn set_component_id(&mut self, id: Uuid) {
         match self {
             Joint::Revolute(revolute) => revolute.set_component_id(id),
         }
     }
 
-    fn set_name_id(&mut self, id: &Uuid) {
+    fn set_name_id(&mut self, id: Uuid) {
         match self {
             Joint::Revolute(revolute) => revolute.set_name_id(id),
         }
     }
 
-    fn set_node_id(&mut self, id: &Uuid) {
+    fn set_node_id(&mut self, id: Uuid) {
         match self {
             Joint::Revolute(revolute) => revolute.set_node_id(id),
+        }
+    }
+
+    fn set_system_id(&mut self, id: usize) {
+        match self {
+            Joint::Revolute(revolute) => revolute.set_system_id(id),
         }
     }
 }

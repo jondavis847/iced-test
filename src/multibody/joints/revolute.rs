@@ -1,6 +1,5 @@
-use crate::multibody::{
-    connection::JointConnection,
-    joints::{JointParameters, JointTrait},
+use crate::multibody::{    
+    joints::JointParameters,
     MultibodyMeta, MultibodyTrait,
 };
 use crate::ui::dummies::{DummyComponent, DummyRevolute, DummyTrait};
@@ -29,8 +28,7 @@ impl RevoluteState {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct Revolute {
-    connection: JointConnection,
+pub struct Revolute {    
     pub meta: MultibodyMeta,
     pub parameters: JointParameters,
     pub state: RevoluteState,
@@ -55,8 +53,7 @@ impl Revolute {
             dummy.spring_constant.parse().unwrap_or(0.0),
         );
 
-        Self {
-            connection: JointConnection::default(),
+        Self {            
             meta: meta,
             parameters: parameters,
             state: state,
@@ -64,37 +61,44 @@ impl Revolute {
     }
 }
 
-impl JointTrait for Revolute {
-    fn connect_from(&mut self, from_id: Uuid) {
-        self.connection.inner_body = Some(from_id);
+impl MultibodyTrait for Revolute {
+    fn connect_from(&mut self, id:Uuid) {
+        self.meta.from_id = Some(id);
     }
-    fn connect_to(&mut self, to_id: Uuid) {
-        self.connection.outer_body = Some(to_id);
+
+    fn connect_to(&mut self, id: Uuid) {
+        self.meta.to_id = Some(id);
     }
 
     fn delete_from(&mut self) {
-        self.connection.inner_body = None;
+        self.meta.from_id = None;
     }
     fn delete_to(&mut self) {
-        self.connection.outer_body = None;
-    }
-}
-
-impl MultibodyTrait for Revolute {
-    fn get_component_id(&self) -> &Uuid {
-        &self.meta.component_id
+        self.meta.to_id = None;
     }
 
-    fn get_dummy_id(&self) -> &Uuid {
-        &self.meta.dummy_id
+    fn get_component_id(&self) -> Uuid {
+        self.meta.component_id
+    }
+
+    fn get_dummy_id(&self) -> Uuid {
+        self.meta.dummy_id
+    }
+
+    fn get_from_id(&self) -> Option<Uuid> {
+        self.meta.from_id
     }
 
     fn get_name_id(&self) -> Uuid {
         self.meta.name_id
     }
 
-    fn get_node_id(&self) -> &Uuid {
-        &self.meta.node_id
+    fn get_node_id(&self) -> Uuid {
+        self.meta.node_id
+    }
+
+    fn get_to_id(&self) -> Option<Uuid> {
+        self.meta.to_id
     }
 
     fn inherit_from(&mut self, dummy: &DummyComponent) {
@@ -104,15 +108,19 @@ impl MultibodyTrait for Revolute {
         }
     }
 
-    fn set_component_id(&mut self, id: &Uuid) {
-        self.meta.component_id = *id;
+    fn set_component_id(&mut self, id: Uuid) {
+        self.meta.component_id = id;
     }
 
-    fn set_name_id(&mut self, id: &Uuid) {
-        self.meta.name_id = *id;
+    fn set_name_id(&mut self, id: Uuid) {
+        self.meta.name_id = id;
     }
 
-    fn set_node_id(&mut self, id: &Uuid) {
-        self.meta.node_id = *id;
+    fn set_node_id(&mut self, id: Uuid) {
+        self.meta.node_id = id;
+    }
+
+    fn set_system_id(&mut self, id: usize) {
+        self.meta.system_id = Some(id);        
     }
 }

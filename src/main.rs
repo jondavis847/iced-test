@@ -240,7 +240,7 @@ impl AppState {
             self.graph.left_button_released(&release_event, cursor)
         {
             if let Some(component) = self.graph.components.get(&id) {
-                let active_modal = ActiveModal::new(*component.get_dummy_id(), Some(id));
+                let active_modal = ActiveModal::new(component.get_dummy_id(), Some(id));
 
                 if let Some(dummy) = self
                     .nodebar

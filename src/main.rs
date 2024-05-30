@@ -56,6 +56,7 @@ enum Message {
     RevoluteThetaInputChanged(String),
     LeftButtonPressed(Cursor),
     LeftButtonReleased(Cursor),
+    MiddleButtonPressed(Cursor),
     RightButtonPressed(Cursor),
     RightButtonReleased(Cursor),
     CursorMoved(Cursor),
@@ -258,6 +259,12 @@ impl AppState {
         }
 
         self.cache.clear();
+        Command::none()
+    }
+
+    pub fn middle_button_pressed(&mut self, _cursor: Cursor) -> Command<Message> {
+        let (_,system) = self.graph.create_multibody_system();
+        dbg!(system);
         Command::none()
     }
 
@@ -471,6 +478,7 @@ impl Application for IcedTest {
                 }
                 Message::LeftButtonPressed(cursor) => state.left_button_pressed(cursor),
                 Message::LeftButtonReleased(cursor) => state.left_button_released(cursor),
+                Message::MiddleButtonPressed(cursor) => state.middle_button_pressed(cursor),
                 Message::RightButtonPressed(cursor) => state.right_button_pressed(cursor),
                 Message::RightButtonReleased(cursor) => state.right_button_released(cursor),
                 Message::CloseError => state.close_error(),

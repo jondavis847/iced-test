@@ -1,6 +1,5 @@
 use crate::font::Font;
 use crate::ui::theme::Theme;
-use uuid::Uuid;
 
 use iced::{
     alignment::{Horizontal, Vertical},

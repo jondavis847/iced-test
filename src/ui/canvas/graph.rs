@@ -1,25 +1,25 @@
-use iced::{mouse::Cursor, Command, Point, Rectangle, Size};
+use iced::{mouse::Cursor, Point, Rectangle, Size};
 use std::collections::HashMap;
 use uuid::Uuid;
 
 use super::edge::{Edge, EdgeConnection};
 use super::node::Node;
-use crate::multibody::{
-    joints::Joint,
-    MultibodyComponent, MultibodyTrait,
+use crate::multibody::{joints::Joint, MultibodyComponent, MultibodySystem, MultibodyTrait,
 };
 use crate::ui::dummies::{DummyComponent, DummyTrait};
-use crate::Message;
 use crate::{MouseButton, MouseButtonReleaseEvents};
 
 pub enum GraphMessage {
     EditComponent(Uuid),
+    ErrorBodyInvalidId(Uuid),
     ErrorBodyMissingFrom(Uuid),
+    ErrorIdNotFound(Uuid),
     ErrorNoBase,
     ErrorNoBaseConnections,
     ErrorJointMissingFrom(Uuid),
     ErrorJointMissingTo(Uuid),
     ErrorJointNoOuterBody(Uuid),
+    Ok,
 }
 
 #[derive(Debug, Clone)]
@@ -76,80 +76,81 @@ impl Default for Graph {
 }
 
 impl Graph {
-    pub fn create_multibody_system(&mut self) -> Option<GraphMessage> {
-        let mut body_counter = 0;
-        let mut joint_counter = 0;
+    pub fn create_multibody_system(&mut self) -> (GraphMessage, Option<MultibodySystem>) {
+        let mut body_counter: usize = 0;
+        let mut joint_counter: usize = 0;
 
         let mut base = None;
         let mut base_joints = Vec::new();
-        //let mut joints = Vec::new();
-        //let mut bodies = Vec::new();
+        let mut joints = Vec::<Joint>::new();
+        let mut bodies = Vec::<MultibodyComponent>::new(); //Multibody component so it can be base and body
 
         // verify at least 1 base
-        for (id, component) in &self.components {
+        for (_, component) in &self.components {
             match component {
-                MultibodyComponent::Base(_) => base = Some(id),
+                MultibodyComponent::Base(_) => base = Some(component),
                 _ => {}
             }
         }
-        if base.is_none() {
-            return Some(GraphMessage::ErrorNoBase);
-        }
 
-        let base_id = base.unwrap();
+        let base = match base {
+            Some(base) => base,
+            None => return (GraphMessage::ErrorNoBase, None),
+        };
+
+        let base_id = base.get_component_id();
 
         for (id, component) in &self.components {
             match component {
                 MultibodyComponent::Joint(joint) => {
-
                     // ensure all joints have a from id
                     let from_id = match joint.get_from_id() {
                         Some(id) => id,
-                        None => return Some(GraphMessage::ErrorJointMissingFrom(*id)),
+                        None => return (GraphMessage::ErrorJointMissingFrom(*id), None),
                     };
 
                     // ensure all joints have a to id
-                    match joint.get_to_id() {
-                        Some(id) => id,
-                        None => return Some(GraphMessage::ErrorJointMissingTo(*id)),
+                    if joint.get_to_id().is_empty() {
+                        return (GraphMessage::ErrorJointMissingTo(*id), None);
                     };
 
                     // if the from id equals the base id, the joint is connected to the base
-                    if from_id == *base_id {
+                    if from_id == base_id {
                         base_joints.push(*id);
                     }
                 }
                 MultibodyComponent::Body(body) => {
                     // ensure all bodies have a from id
                     match body.get_from_id() {
-                        Some(_) => {},
-                        None => return Some(GraphMessage::ErrorBodyMissingFrom(*id)),
+                        Some(_) => {}
+                        None => return (GraphMessage::ErrorBodyMissingFrom(*id), None),
                     };
                 }
-                _=> {}
+                _ => {}
             }
         }
 
         // verify something is connected to the base
         if base_joints.is_empty() {
-            return Some(GraphMessage::ErrorNoBaseConnections)
+            return (GraphMessage::ErrorNoBaseConnections, None);
         }
 
-        for joint_id in base_joints {
-            // unwrap should be safe since we checked in the previous loop
-            let joint = self.components.get_mut(&joint_id).unwrap(); 
-            joint.set_system_id(joint_counter);
-            joint_counter += 1;
-            let outer_body_id = joint.get_to_id().unwrap();                        
-            let outer_body = match self.components.get_mut(&outer_body_id) {
-                Some(body) => body,
-                None => return Some(GraphMessage::ErrorJointNoOuterBody(joint_id))
-            };
-            outer_body.set_system_id(body_counter);
-            body_counter += 1;
-            
+        // recursively clone, identify, and push the componentns to make the multibody tree
+        let message = self.traverse_component(
+            base,
+            &mut bodies,
+            &mut joints,
+            &mut body_counter,
+            &mut joint_counter,
+        );
+
+        match message {
+            GraphMessage::Ok => {
+                let system = MultibodySystem::new(bodies, joints);
+                return (message, Some(system));
+            }
+            _ => return (message, None),
         }
-        None
     }
 
     pub fn cursor_moved(&mut self, cursor: Cursor) -> bool {
@@ -546,6 +547,81 @@ impl Graph {
 
     fn set_name(&mut self, name_id: &Uuid, name: &str) {
         self.names.insert(*name_id, name.to_string());
+    }
+
+    // Recursive function to traverse the components
+    fn traverse_component(
+        &self,
+        component: &MultibodyComponent,
+        bodies: &mut Vec<MultibodyComponent>,
+        joints: &mut Vec<Joint>,
+        body_counter: &mut usize,
+        joint_counter: &mut usize,
+    ) -> GraphMessage {
+        let mut message = GraphMessage::Ok;
+        match component {
+            MultibodyComponent::Body(body) => {
+                println!("Traversing Body: {:?}", body);
+                let mut body_clone = component.clone();
+                body_clone.set_system_id(*body_counter);
+                bodies.push(body_clone);
+                *body_counter += 1;
+                // Traverse the joints connected to this body
+                for joint_id in body.get_to_id() {
+                    let joint = match self.components.get(joint_id) {
+                        Some(joint) => joint,
+                        None => return GraphMessage::ErrorIdNotFound(*joint_id),
+                    };
+                    message =
+                        self.traverse_component(joint, bodies, joints, body_counter, joint_counter);
+                    match message {
+                        GraphMessage::Ok => {}
+                        _ => return message,
+                    }
+                }
+            }
+
+            MultibodyComponent::Base(base) => {
+                println!("Traversing Base: {:?}", base);
+                let mut base_clone = component.clone();
+                base_clone.set_system_id(*body_counter);
+                bodies.push(base_clone);
+                *body_counter += 1;
+                // Traverse the joints connected to this body
+                for joint_id in base.get_to_id() {
+                    let joint = match self.components.get(joint_id) {
+                        Some(joint) => joint,
+                        None => return GraphMessage::ErrorIdNotFound(*joint_id),
+                    };
+                    message =
+                        self.traverse_component(joint, bodies, joints, body_counter, joint_counter);
+                    match message {
+                        GraphMessage::Ok => {}
+                        _ => return message,
+                    }
+                }
+            }
+            MultibodyComponent::Joint(joint) => {
+                println!("Traversing Joint: {:?}", joint);
+                let mut joint_clone = joint.clone();
+                joint_clone.set_system_id(*joint_counter);
+                *joint_counter += 1;
+                joints.push(joint_clone);
+                for outer_body_id in joint.get_to_id() {
+                    let body = match self.components.get(outer_body_id) {
+                        Some(body) => body,
+                        None => return GraphMessage::ErrorIdNotFound(*outer_body_id),
+                    };
+                    message =
+                        self.traverse_component(body, bodies, joints, body_counter, joint_counter);
+                    match message {
+                        GraphMessage::Ok => {}
+                        _ => return message,
+                    }
+                }
+            }
+        }
+        message
     }
 
     pub fn window_resized(&mut self, size: Size) {

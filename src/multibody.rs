@@ -9,7 +9,7 @@ use body::Body;
 use joints::{Joint, revolute::Revolute};
 
 use crate::ui::dummies::{DummyComponent, DummyTrait};
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct MultibodyMeta {
     component_id: Uuid,        
     dummy_id: Uuid,
@@ -17,14 +17,14 @@ pub struct MultibodyMeta {
     name_id: Uuid,        
     node_id: Uuid,    
     system_id: Option<usize>,
-    to_id: Option<Uuid>,
+    to_id: Vec<Uuid>,
 }
 
 impl MultibodyMeta {
     pub fn new(component_id: Uuid, dummy_id: Uuid, name_id: Uuid, node_id: Uuid) -> Self {
         let from_id = None;
         let system_id = None;
-        let to_id = None;
+        let to_id = Vec::new();
         Self {
             component_id,                        
             dummy_id,
@@ -41,13 +41,13 @@ pub trait MultibodyTrait {
     fn connect_from(&mut self, id: Uuid);
     fn connect_to(&mut self, id: Uuid);
     fn delete_from(&mut self);
-    fn delete_to(&mut self);
+    fn delete_to(&mut self, id: Uuid);
     fn get_component_id(&self) -> Uuid;
     fn get_dummy_id(&self) -> Uuid;    
     fn get_from_id(&self) -> Option<Uuid>;    
     fn get_name_id(&self) -> Uuid;
     fn get_node_id(&self) -> Uuid;    
-    fn get_to_id(&self) -> Option<Uuid>;
+    fn get_to_id(&self) -> &Vec<Uuid>;
     fn inherit_from(&mut self, dummy: &DummyComponent);
     fn set_component_id(&mut self, id: Uuid);    
     fn set_name_id(&mut self, id: Uuid);    
@@ -55,7 +55,7 @@ pub trait MultibodyTrait {
     fn set_system_id(&mut self, id: usize);
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub enum MultibodyComponent {
     Base(Base),
     Body(Body),
@@ -86,11 +86,11 @@ impl MultibodyTrait for MultibodyComponent {
         }
     }
 
-    fn delete_to(&mut self) {
+    fn delete_to(&mut self, id: Uuid) {
         match self {
-            MultibodyComponent::Base(base) => base.delete_to(),
-            MultibodyComponent::Body(body) => body.delete_to(),
-            MultibodyComponent::Joint(joint) => joint.delete_to(),
+            MultibodyComponent::Base(base) => base.delete_to(id),
+            MultibodyComponent::Body(body) => body.delete_to(id),
+            MultibodyComponent::Joint(joint) => joint.delete_to(id),
         }
     }
     fn get_component_id(&self) -> Uuid {
@@ -133,7 +133,7 @@ impl MultibodyTrait for MultibodyComponent {
         }
     }
 
-    fn get_to_id(&self) -> Option<Uuid> {
+    fn get_to_id(&self) -> &Vec<Uuid> {
         match self {
             MultibodyComponent::Base(base) => base.get_to_id(),
             MultibodyComponent::Body(body) => body.get_to_id(),
@@ -193,8 +193,17 @@ impl MultibodyComponent {
     }
 }
 
-pub struct MultibodySystem {
-    base: Base,
-    bodies: Vec<Body>,
+#[derive(Debug,Clone)]
+pub struct MultibodySystem {    
+    bodies: Vec<MultibodyComponent>, // MultibodyComponent since its both base and bodies
     joints: Vec<Joint>,
+}
+
+impl MultibodySystem {
+    pub fn new(bodies:Vec<MultibodyComponent>, joints: Vec<Joint>) -> Self {
+        Self{
+            bodies,
+            joints
+        }
+    }
 }

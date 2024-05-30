@@ -2,7 +2,7 @@ use super::{MultibodyMeta, MultibodyTrait};
 use crate::ui::dummies::DummyComponent;
 use uuid::Uuid;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct Base {
     pub meta: MultibodyMeta,
 }
@@ -21,13 +21,13 @@ impl MultibodyTrait for Base {
     }
 
     fn connect_to(&mut self, id: Uuid) {
-        self.meta.to_id = Some(id);
+        self.meta.to_id.push(id);
     }
     fn delete_from(&mut self) {
         self.meta.from_id = None;
     }
-    fn delete_to(&mut self) {
-        self.meta.to_id = None;
+    fn delete_to(&mut self, id:Uuid) {
+        self.meta.to_id.retain(|&to_id| to_id != id);
     }
     fn get_component_id(&self) -> Uuid {
         self.meta.component_id
@@ -49,8 +49,8 @@ impl MultibodyTrait for Base {
            self.meta.node_id
     }
 
-    fn get_to_id(&self) -> Option<Uuid> {
-        self.meta.to_id
+    fn get_to_id(&self) -> &Vec<Uuid> {
+        &self.meta.to_id
     }
 
 
@@ -74,8 +74,8 @@ impl MultibodyTrait for Base {
         self.meta.node_id = id;
     }
 
-    fn set_system_id(&mut self, _id: usize) {
-        // nothing for now
+    fn set_system_id(&mut self, id: usize) {
+        self.meta.system_id = Some(id);
     }
     
 }

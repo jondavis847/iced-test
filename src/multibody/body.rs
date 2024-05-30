@@ -18,7 +18,7 @@ pub enum BodyField {
     Iyz,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct Body {
     pub meta: MultibodyMeta,
     pub mass: f64,
@@ -59,13 +59,13 @@ impl MultibodyTrait for Body {
     }
 
     fn connect_to(&mut self, id: Uuid) {
-        self.meta.to_id = Some(id);
+        self.meta.to_id.push(id);
     }
     fn delete_from(&mut self) {
         self.meta.from_id = None;
     }
-    fn delete_to(&mut self) {
-        self.meta.to_id = None;
+    fn delete_to(&mut self, id:Uuid) {
+        self.meta.to_id.retain(|&to_id| to_id != id);
     }
     fn get_component_id(&self) -> Uuid {
         self.meta.component_id
@@ -87,8 +87,8 @@ impl MultibodyTrait for Body {
         self.meta.node_id
     }
 
-    fn get_to_id(&self) -> Option<Uuid> {
-        self.meta.to_id
+    fn get_to_id(&self) -> &Vec<Uuid> {
+        &self.meta.to_id
     }
 
     fn inherit_from(&mut self, dummy: &DummyComponent) {

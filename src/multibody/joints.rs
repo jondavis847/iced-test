@@ -5,7 +5,7 @@ pub mod revolute;
 use crate::ui::dummies::DummyComponent;
 use revolute::Revolute;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub enum Joint {
     //Floating,
     //Prismatic,
@@ -31,9 +31,9 @@ impl MultibodyTrait for Joint {
         }
     }
 
-    fn delete_to(&mut self) {
+    fn delete_to(&mut self, id: Uuid) {
         match self {
-            Joint::Revolute(joint) => joint.delete_to(),
+            Joint::Revolute(joint) => joint.delete_to(id),
         }
     }
 
@@ -67,7 +67,7 @@ impl MultibodyTrait for Joint {
         }
     }
 
-    fn get_to_id(&self) -> Option<Uuid> {
+    fn get_to_id(&self) -> &Vec<Uuid> {
         match self {
             Joint::Revolute(revolute) => revolute.get_to_id(),
         }

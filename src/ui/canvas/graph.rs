@@ -4,8 +4,7 @@ use uuid::Uuid;
 
 use super::edge::{Edge, EdgeConnection};
 use super::node::Node;
-use crate::multibody::{joints::Joint, MultibodyComponent, MultibodySystem, MultibodyTrait,
-};
+use crate::multibody::{joints::Joint, MultibodyComponent, MultibodyErrors, MultibodySystem, MultibodyTrait};
 use crate::ui::dummies::{DummyComponent, DummyTrait};
 use crate::{MouseButton, MouseButtonReleaseEvents};
 
@@ -15,10 +14,11 @@ pub enum GraphMessage {
     ErrorBodyMissingFrom(Uuid),
     ErrorIdNotFound(Uuid),
     ErrorNoBase,
-    ErrorNoBaseConnections,
+    ErrorNoBaseConnections,    
     ErrorJointMissingFrom(Uuid),
     ErrorJointMissingTo(Uuid),
     ErrorJointNoOuterBody(Uuid),
+    ErrorMultibody(MultibodyErrors),
     Ok,
 }
 
@@ -49,7 +49,6 @@ pub struct Graph {
     pub is_clicked: bool,
     last_cursor_position: Option<Point>,
     left_clicked_node: Option<Uuid>,
-    pub names: HashMap<Uuid, String>,
     pub nodes: HashMap<Uuid, GraphNode>,
     right_clicked_node: Option<Uuid>,
     selected_node: Option<Uuid>,
@@ -66,7 +65,6 @@ impl Default for Graph {
             is_clicked: false,
             last_cursor_position: None,
             left_clicked_node: None,
-            names: HashMap::new(),
             nodes: HashMap::new(),
             right_clicked_node: None,
             selected_node: None,
@@ -220,11 +218,7 @@ impl Graph {
                     self.edges.remove(&edge_id);
                 }
 
-                // Remove the name from names
                 if let Some(component) = self.components.get(&selected_node.component_id) {
-                    let name_id = component.get_name_id();
-                    self.names.remove(&name_id);
-
                     // Remove the component from components
                     self.components.remove(&selected_node.component_id);
                 }
@@ -232,19 +226,16 @@ impl Graph {
         }
     }
 
-    pub fn edit_component(&mut self, dummy: &DummyComponent, component_id: &Uuid) {
-        let component = match self.components.get(component_id) {
+    pub fn edit_component(&mut self, dummy: &DummyComponent, component_id: Uuid) -> GraphMessage {
+        let component = match self.components.get(&component_id) {
             Some(component) => component,
-            None => return,
+            None => return GraphMessage::ErrorIdNotFound(component_id),
         };
 
-        let name_id = component.get_name_id();
-
-        // set the name here since name exists in self.name rather than the component
-        self.set_name(&name_id, dummy.get_name());
-        if let Some(component) = self.components.get_mut(component_id) {
+        if let Some(component) = self.components.get_mut(&component_id) {
             component.inherit_from(dummy);
         }
+        GraphMessage::Ok
     }
 
     /// Finds a node within snapping distance of the cursor on the graph, if any.
@@ -513,7 +504,7 @@ impl Graph {
         self.right_clicked_node = None;
     }
 
-    pub fn save_component(&mut self, dummy: &DummyComponent) {
+    pub fn save_component(&mut self, dummy: &DummyComponent) -> GraphMessage {
         // only do this if we can save the node
         if let Some(last_cursor_position) = self.last_cursor_position {
             // Generate unique IDs for component, node, and name
@@ -523,7 +514,12 @@ impl Graph {
 
             // Create the new component from it's dummy
             let new_component =
-                MultibodyComponent::from_dummy(component_id, node_id, name_id, dummy);
+                match MultibodyComponent::from_dummy(component_id, dummy, node_id) {
+                    Ok(component) => component,
+                    Err(error) => {
+                        return GraphMessage::ErrorMultibody(error)
+                    }
+                };
 
             // Calculate the bounds for the new node
             let size = Size::new(100.0, 50.0); // TODO: make width dynamic based on name length
@@ -538,15 +534,11 @@ impl Graph {
             let new_node = Node::new(bounds);
             let graph_node = GraphNode::new(component_id, new_node);
 
-            // Insert the new component and node into their respective collections
-            self.names.insert(name_id, name);
+            // Insert the new component and node into their respective collections            
             self.components.insert(component_id, new_component);
             self.nodes.insert(node_id, graph_node);
         }
-    }
-
-    fn set_name(&mut self, name_id: &Uuid, name: &str) {
-        self.names.insert(*name_id, name.to_string());
+        GraphMessage::Ok
     }
 
     // Recursive function to traverse the components

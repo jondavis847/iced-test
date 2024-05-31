@@ -1,6 +1,11 @@
 use super::{MultibodyMeta, MultibodyTrait};
-use crate::ui::dummies::DummyComponent;
+use crate::ui::dummies::{DummyBase, DummyComponent, DummyErrors, DummyTrait};
 use uuid::Uuid;
+
+#[derive(Debug, Clone, Copy)]
+pub enum BaseErrors {
+    DummyErrors(DummyErrors),
+}
 
 #[derive(Debug, Clone)]
 pub struct Base {
@@ -8,15 +13,23 @@ pub struct Base {
 }
 
 impl Base {
-    pub fn new(component_id: Uuid, dummy_id: Uuid, node_id: Uuid, name_id: Uuid) -> Self {
-        let meta = MultibodyMeta::new(component_id, dummy_id, name_id, node_id);
-        Self { meta }
+    pub fn from_dummy(
+        component_id: Uuid,        
+        dummy: &DummyBase,
+        node_id: Uuid,
+    ) -> Result<Self, BaseErrors> {
+        if dummy.get_name().is_empty() {
+            return Err(BaseErrors::DummyErrors(DummyErrors::NameIsEmpty));
+        }
+
+        let meta = MultibodyMeta::new(component_id, dummy.get_id(), dummy.get_name(), node_id);
+
+        Ok(Self { meta })
     }
 }
 
 impl MultibodyTrait for Base {
-
-    fn connect_from(&mut self, _id:Uuid) {
+    fn connect_from(&mut self, _id: Uuid) {
         //do nothing, nothing before base
     }
 
@@ -26,13 +39,14 @@ impl MultibodyTrait for Base {
     fn delete_from(&mut self) {
         self.meta.from_id = None;
     }
-    fn delete_to(&mut self, id:Uuid) {
+    fn delete_to(&mut self, id: Uuid) {
         self.meta.to_id.retain(|&to_id| to_id != id);
     }
+
     fn get_component_id(&self) -> Uuid {
         self.meta.component_id
     }
-    
+
     fn get_dummy_id(&self) -> Uuid {
         self.meta.dummy_id
     }
@@ -41,23 +55,21 @@ impl MultibodyTrait for Base {
         self.meta.from_id
     }
 
-    fn get_name_id(&self) -> Uuid {
-        self.meta.name_id
+    fn get_name(&self) -> &str {
+        &self.meta.name
     }
 
     fn get_node_id(&self) -> Uuid {
-           self.meta.node_id
+        self.meta.node_id
     }
 
     fn get_to_id(&self) -> &Vec<Uuid> {
         &self.meta.to_id
     }
 
-
     fn inherit_from(&mut self, dummy: &DummyComponent) {
         match dummy {
-            DummyComponent::Base(_) => {                
-            }
+            DummyComponent::Base(_) => {}
             _ => {} // error! must be dummy base
         }
     }
@@ -66,8 +78,8 @@ impl MultibodyTrait for Base {
         self.meta.component_id = id;
     }
 
-    fn set_name_id(&mut self, id: Uuid) {
-        self.meta.name_id = id;
+    fn set_name(&mut self, name: String) {
+        self.meta.name = name;
     }
 
     fn set_node_id(&mut self, id: Uuid) {
@@ -77,5 +89,4 @@ impl MultibodyTrait for Base {
     fn set_system_id(&mut self, id: usize) {
         self.meta.system_id = Some(id);
     }
-    
 }

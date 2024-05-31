@@ -55,9 +55,9 @@ impl MultibodyTrait for Joint {
         }
     }
 
-    fn get_name_id(&self) -> Uuid {
+    fn get_name(&self) -> &str {
         match self {
-            Joint::Revolute(revolute) => revolute.get_name_id(),
+            Joint::Revolute(revolute) => revolute.get_name(),
         }
     }
 
@@ -84,9 +84,9 @@ impl MultibodyTrait for Joint {
         }
     }
 
-    fn set_name_id(&mut self, id: Uuid) {
+    fn set_name(&mut self, name: String) {
         match self {
-            Joint::Revolute(revolute) => revolute.set_name_id(id),
+            Joint::Revolute(revolute) => revolute.set_name(name),
         }
     }
 

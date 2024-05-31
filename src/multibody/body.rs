@@ -1,6 +1,9 @@
-use crate::ui::dummies::{DummyBody, DummyComponent, DummyTrait};
+use crate::ui::dummies::{DummyBody, DummyComponent, DummyErrors, DummyTrait};
 
-use super::{MultibodyMeta, MultibodyTrait};
+use super::{
+    mass_properties::{MassProperties, MassPropertiesError},
+    MultibodyMeta, MultibodyTrait,
+};
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Copy)]
@@ -20,41 +23,176 @@ pub enum BodyField {
 
 #[derive(Debug, Clone)]
 pub struct Body {
-    pub meta: MultibodyMeta,
-    pub mass: f64,
-    pub cmx: f64,
-    pub cmy: f64,
-    pub cmz: f64,
-    pub ixx: f64,
-    pub iyy: f64,
-    pub izz: f64,
-    pub ixy: f64,
-    pub ixz: f64,
-    pub iyz: f64,
+    mass_properties: MassProperties,
+    meta: MultibodyMeta,    
+}
+
+pub enum BodyErrors {
+    DummyErrors(DummyErrors),
+    MassPropertiesError(MassPropertiesError),
 }
 
 impl Body {
-    pub fn from_dummy(component_id: Uuid, node_id: Uuid, name_id: Uuid, dummy: &DummyBody) -> Self {
-        let meta = MultibodyMeta::new(component_id, dummy.get_id(), name_id, node_id);
-        Self {
+    pub fn from_dummy(
+        component_id: Uuid,        
+        dummy: &DummyBody,
+        node_id: Uuid,        
+    ) -> Result<Self, BodyErrors> {        
+
+        let name = dummy.get_name();
+
+        if name.is_empty() {
+            return Err(BodyErrors::DummyErrors(DummyErrors::NameIsEmpty))
+        }        
+
+        let meta = MultibodyMeta::new(component_id, dummy.get_id(), name, node_id);
+        let mass_properties = match MassProperties::new(
+            dummy.mass.parse().unwrap_or(1.0),
+            dummy.cmx.parse().unwrap_or(0.0),
+            dummy.cmy.parse().unwrap_or(0.0),
+            dummy.cmz.parse().unwrap_or(0.0),
+            dummy.ixx.parse().unwrap_or(1.0),
+            dummy.iyy.parse().unwrap_or(1.0),
+            dummy.izz.parse().unwrap_or(1.0),
+            dummy.ixy.parse().unwrap_or(0.0),
+            dummy.ixz.parse().unwrap_or(0.0),
+            dummy.iyz.parse().unwrap_or(0.0),
+        ) {
+            Ok(mass_properties) => mass_properties,
+            Err(error) => return Err(BodyErrors::MassPropertiesError(error)),
+        };
+
+        Ok(Self {
             meta,
-            mass: dummy.mass.parse().unwrap_or(1.0),
-            cmx: dummy.cmx.parse().unwrap_or(0.0),
-            cmy: dummy.cmy.parse().unwrap_or(0.0),
-            cmz: dummy.cmz.parse().unwrap_or(0.0),
-            ixx: dummy.ixx.parse().unwrap_or(1.0),
-            iyy: dummy.iyy.parse().unwrap_or(1.0),
-            izz: dummy.izz.parse().unwrap_or(1.0),
-            ixy: dummy.ixy.parse().unwrap_or(0.0),
-            ixz: dummy.ixz.parse().unwrap_or(0.0),
-            iyz: dummy.iyz.parse().unwrap_or(0.0),
+            mass_properties,
+        })
+    }
+
+    /// Returns the x-coordinate of the center of mass.
+    pub fn get_cmx(&self) -> f64 {
+        self.mass_properties.get_cmx()
+    }
+
+    /// Returns the y-coordinate of the center of mass.
+    pub fn get_cmy(&self) -> f64 {
+        self.mass_properties.get_cmy()
+    }
+
+    /// Returns the y-coordinate of the center of mass.
+    pub fn get_cmz(&self) -> f64 {
+        self.mass_properties.get_cmz()
+    }
+
+    /// Returns the moment of inertia around the x-axis.
+    pub fn get_ixx(&self) -> f64 {
+        self.mass_properties.get_ixx()
+    }
+
+    /// Returns the product of inertia for the xy-plane.
+    pub fn get_ixy(&self) -> f64 {
+        self.mass_properties.get_ixy()
+    }
+
+    /// Returns the product of inertia for the xz-plane.
+    pub fn get_ixz(&self) -> f64 {
+        self.mass_properties.get_ixz()
+    }
+
+    /// Returns the moment of inertia around the y-axis.
+    pub fn get_iyy(&self) -> f64 {
+        self.mass_properties.get_iyy()
+    }
+
+    /// Returns the product of inertia for the yz-plane.
+    pub fn get_iyz(&self) -> f64 {
+        self.mass_properties.get_iyz()
+    }
+
+    /// Returns the moment of inertia around the z-axis.
+    pub fn get_izz(&self) -> f64 {
+        self.mass_properties.get_izz()
+    }
+
+    /// Returns the mass of the object.
+    pub fn get_mass(&self) -> f64 {
+        self.mass_properties.get_mass()
+    }        
+
+    fn set_cmx(&mut self, cmx: f64) -> Result<(),BodyErrors> {
+        match self.mass_properties.set_cmx(cmx) {
+            Err(error) => Err(BodyErrors::MassPropertiesError(error)),
+            Ok(_) => Ok(())
         }
     }
+
+    fn set_cmy(&mut self, cmy: f64) -> Result<(),BodyErrors> {
+        match self.mass_properties.set_cmy(cmy) {
+            Err(error) => Err(BodyErrors::MassPropertiesError(error)),
+            Ok(_) => Ok(())
+        }
+    }
+
+    fn set_cmz(&mut self, cmz: f64) -> Result<(),BodyErrors> {
+        match self.mass_properties.set_cmx(cmz) {
+            Err(error) => Err(BodyErrors::MassPropertiesError(error)),
+            Ok(_) => Ok(())
+        }
+    }
+
+    fn set_ixx(&mut self, ixx: f64) -> Result<(),BodyErrors> {
+        match self.mass_properties.set_ixx(ixx) {
+            Err(error) => Err(BodyErrors::MassPropertiesError(error)),
+            Ok(_) => Ok(())
+        }
+    }
+
+    fn set_ixy(&mut self, ixy: f64) -> Result<(),BodyErrors> {
+        match self.mass_properties.set_ixy(ixy) {
+            Err(error) => Err(BodyErrors::MassPropertiesError(error)),
+            Ok(_) => Ok(())
+        }
+    }
+
+    fn set_ixz(&mut self, ixz: f64) -> Result<(),BodyErrors> {
+        match self.mass_properties.set_ixx(ixz) {
+            Err(error) => Err(BodyErrors::MassPropertiesError(error)),
+            Ok(_) => Ok(())
+        }
+    }
+
+    fn set_iyy(&mut self, iyy: f64) -> Result<(),BodyErrors> {
+        match self.mass_properties.set_iyy(iyy) {
+            Err(error) => Err(BodyErrors::MassPropertiesError(error)),
+            Ok(_) => Ok(())
+        }
+    }
+
+    fn set_iyz(&mut self, iyz: f64) -> Result<(),BodyErrors> {
+        match self.mass_properties.set_ixx(iyz) {
+            Err(error) => Err(BodyErrors::MassPropertiesError(error)),
+            Ok(_) => Ok(())
+        }
+    }
+
+    fn set_izz(&mut self, izz: f64) -> Result<(),BodyErrors> {
+        match self.mass_properties.set_izz(izz) {
+            Err(error) => Err(BodyErrors::MassPropertiesError(error)),
+            Ok(_) => Ok(())
+        }
+    }
+
+    fn set_mass(&mut self, mass: f64) -> Result<(),BodyErrors> {
+        match self.mass_properties.set_mass(mass) {
+            Err(error) => Err(BodyErrors::MassPropertiesError(error)),
+            Ok(_) => Ok(())
+        }
+    }
+
+
 }
 
 impl MultibodyTrait for Body {
-
-    fn connect_from(&mut self, id:Uuid) {
+    fn connect_from(&mut self, id: Uuid) {
         self.meta.from_id = Some(id);
     }
 
@@ -64,9 +202,10 @@ impl MultibodyTrait for Body {
     fn delete_from(&mut self) {
         self.meta.from_id = None;
     }
-    fn delete_to(&mut self, id:Uuid) {
+    fn delete_to(&mut self, id: Uuid) {
         self.meta.to_id.retain(|&to_id| to_id != id);
     }
+
     fn get_component_id(&self) -> Uuid {
         self.meta.component_id
     }
@@ -79,8 +218,8 @@ impl MultibodyTrait for Body {
         self.meta.from_id
     }
 
-    fn get_name_id(&self) -> Uuid {
-        self.meta.name_id
+    fn get_name(&self) -> &str {
+        &self.meta.name
     }
 
     fn get_node_id(&self) -> Uuid {
@@ -93,17 +232,18 @@ impl MultibodyTrait for Body {
 
     fn inherit_from(&mut self, dummy: &DummyComponent) {
         match dummy {
-            DummyComponent::Body(body) => {
-                self.mass = body.mass.parse().unwrap_or(1.0);
-                self.cmx = body.cmx.parse().unwrap_or(0.0);
-                self.cmy = body.cmy.parse().unwrap_or(0.0);
-                self.cmz = body.cmz.parse().unwrap_or(0.0);
-                self.ixx = body.ixx.parse().unwrap_or(1.0);
-                self.iyy = body.iyy.parse().unwrap_or(1.0);
-                self.izz = body.izz.parse().unwrap_or(1.0);
-                self.ixy = body.ixy.parse().unwrap_or(0.0);
-                self.ixz = body.ixz.parse().unwrap_or(0.0);
-                self.iyz = body.iyz.parse().unwrap_or(0.0);
+            DummyComponent::Body(dummy_body) => {
+                self.set_name(dummy.get_name()); //TODO need an error for if name is empty
+                self.set_mass(dummy_body.mass.parse().unwrap_or(1.0));
+                self.set_cmx(dummy_body.cmx.parse().unwrap_or(0.0));
+                self.set_cmy(dummy_body.cmy.parse().unwrap_or(0.0));
+                self.set_cmz(dummy_body.cmz.parse().unwrap_or(0.0));
+                self.set_ixx(dummy_body.ixx.parse().unwrap_or(1.0));
+                self.set_iyy(dummy_body.iyy.parse().unwrap_or(1.0));
+                self.set_izz(dummy_body.izz.parse().unwrap_or(1.0));
+                self.set_ixy(dummy_body.ixy.parse().unwrap_or(0.0));
+                self.set_ixz(dummy_body.ixz.parse().unwrap_or(0.0));
+                self.set_iyz(dummy_body.iyz.parse().unwrap_or(0.0));
             }
             _ => {} //error! must be a body
         }
@@ -113,8 +253,8 @@ impl MultibodyTrait for Body {
         self.meta.component_id = id;
     }
 
-    fn set_name_id(&mut self, id: Uuid) {
-        self.meta.name_id = id;
+    fn set_name(&mut self, name: String) {
+        self.meta.name = name;
     }
 
     fn set_node_id(&mut self, id: Uuid) {

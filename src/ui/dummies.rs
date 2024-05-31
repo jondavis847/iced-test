@@ -2,6 +2,11 @@ use crate::multibody::{joints::Joint, MultibodyComponent, MultibodyTrait};
 use crate::ui::canvas::graph::Graph;
 use uuid::Uuid;
 
+#[derive(Debug, Clone, Copy)]
+pub enum DummyErrors {
+    NameIsEmpty,
+}
+
 /// DummyComponents are like MultibodyComponents but with String fields
 /// for editing in the text inputs rather than numeric values
 #[derive(Debug, Clone)]
@@ -14,14 +19,14 @@ pub enum DummyComponent {
 pub trait DummyTrait {
     fn clear(&mut self);
     fn get_id(&self) -> Uuid;
-    fn get_name(&self) -> &str;
+    fn get_name(&self) -> String;
     fn inherit_from(&mut self, component_id: &Uuid, graph: &Graph); // these args suck, but has to be this way sicne names is stored separately in graph for performance
     fn set_name(&mut self, name: &str);
 }
 
 impl DummyTrait for DummyComponent {
     fn clear(&mut self) {
-        match self {            
+        match self {
             DummyComponent::Base(component) => component.clear(),
             DummyComponent::Body(component) => component.clear(),
             DummyComponent::Revolute(component) => component.clear(),
@@ -29,14 +34,14 @@ impl DummyTrait for DummyComponent {
     }
 
     fn get_id(&self) -> Uuid {
-        match self {            
+        match self {
             DummyComponent::Base(component) => component.get_id(),
             DummyComponent::Body(component) => component.get_id(),
             DummyComponent::Revolute(component) => component.get_id(),
         }
     }
 
-    fn get_name(&self) -> &str {
+    fn get_name(&self) -> String {
         match self {
             DummyComponent::Base(component) => component.get_name(),
             DummyComponent::Body(component) => component.get_name(),
@@ -85,18 +90,15 @@ impl DummyTrait for DummyBase {
         self.id
     }
 
-    fn get_name(&self) -> &str {
-        self.name.as_str()
+    fn get_name(&self) -> String {
+        self.name.to_string()
     }
 
     fn inherit_from(&mut self, component_id: &Uuid, graph: &Graph) {
         if let Some(component) = graph.components.get(component_id) {
             match component {
                 MultibodyComponent::Base(_) => {
-                    if let Some(name) = graph.names.get(&component.get_name_id()) {
-                        self.set_name(name);
-                    }
-
+                    self.set_name(&component.get_name());
                 }
                 _ => {} // TODO: error! must be a base
             }
@@ -111,7 +113,7 @@ impl DummyTrait for DummyBase {
 #[derive(Default, Debug, Clone)]
 pub struct DummyBody {
     id: Uuid,
-    pub name: String,
+    name: String,
     pub mass: String,
     pub cmx: String,
     pub cmy: String,
@@ -152,27 +154,25 @@ impl DummyTrait for DummyBody {
         self.id
     }
 
-    fn get_name(&self) -> &str {
-        self.name.as_str()
+    fn get_name(&self) -> String {
+        self.name.to_string()
     }
 
     fn inherit_from(&mut self, component_id: &Uuid, graph: &Graph) {
         if let Some(component) = graph.components.get(component_id) {
             match component {
                 MultibodyComponent::Body(body) => {
-                    if let Some(name) = graph.names.get(&component.get_name_id()) {
-                        self.set_name(name);
-                    }
-                    self.mass = body.mass.to_string();
-                    self.cmx = body.cmx.to_string();
-                    self.cmy = body.cmy.to_string();
-                    self.cmz = body.cmz.to_string();
-                    self.ixx = body.ixx.to_string();
-                    self.iyy = body.iyy.to_string();
-                    self.izz = body.izz.to_string();
-                    self.ixy = body.ixy.to_string();
-                    self.ixz = body.ixz.to_string();
-                    self.iyz = body.iyz.to_string();
+                    self.set_name(&component.get_name());
+                    self.mass = body.get_mass().to_string();
+                    self.cmx = body.get_cmx().to_string();
+                    self.cmy = body.get_cmy().to_string();
+                    self.cmz = body.get_cmz().to_string();
+                    self.ixx = body.get_ixx().to_string();
+                    self.iyy = body.get_iyy().to_string();
+                    self.izz = body.get_izz().to_string();
+                    self.ixy = body.get_ixy().to_string();
+                    self.ixz = body.get_ixz().to_string();
+                    self.iyz = body.get_iyz().to_string();
                 }
                 _ => {} // TODO: error! must be a base
             }
@@ -192,7 +192,7 @@ pub struct DummyRevolute {
     pub name: String,
     pub omega: String,
     pub spring_constant: String,
-    pub theta: String,    
+    pub theta: String,
 }
 
 impl DummyRevolute {
@@ -213,8 +213,8 @@ impl DummyTrait for DummyRevolute {
         self.id
     }
 
-    fn get_name(&self) -> &str {
-        self.name.as_str()
+    fn get_name(&self) -> String {
+        self.name.to_string()
     }
 
     fn inherit_from(&mut self, component_id: &Uuid, graph: &Graph) {
@@ -222,17 +222,14 @@ impl DummyTrait for DummyRevolute {
             match component {
                 MultibodyComponent::Joint(joint) => match joint {
                     Joint::Revolute(revolute) => {
-                        if let Some(name) = graph.names.get(&component.get_name_id()) {
-                            self.set_name(name);
-                        }        
+                        self.set_name(&component.get_name());
                         self.theta = revolute.state.theta.to_string();
                         self.omega = revolute.state.omega.to_string();
                         self.spring_constant = revolute.parameters.spring_constant.to_string();
                         self.dampening = revolute.parameters.dampening.to_string();
-                        self.constant_force = revolute.parameters.constant_force.to_string();                
-                    }
-                    //_ => {} //TODO: error! must be a revolute
-                }
+                        self.constant_force = revolute.parameters.constant_force.to_string();
+                    } //_ => {} //TODO: error! must be a revolute
+                },
                 _ => {} // TODO: error! must be a joint
             }
         }

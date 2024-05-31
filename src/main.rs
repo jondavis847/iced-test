@@ -309,10 +309,15 @@ impl AppState {
             };
             dummy_component.set_name(&name);
         }
-        match modal.graph_component_id {
-            Some(id) => self.graph.edit_component(&dummy_component, &id),
+        let graph_message = match modal.graph_component_id {
+            Some(id) => self.graph.edit_component(&dummy_component, id),
             None => self.graph.save_component(&dummy_component),
-        }
+        };
+
+        //match graph_message {
+
+
+        //}
 
         // Clear the modal and cache
         dummy_component.clear();
@@ -609,7 +614,7 @@ fn create_body_modal(body: &DummyBody) -> Element<Message, crate::ui::theme::The
     let content = Column::new()
         .push(create_text_input(
             "name",
-            &body.name,
+            &body.get_name(),
             Message::BodyNameInputChanged,
         ))
         .push(create_text_input(

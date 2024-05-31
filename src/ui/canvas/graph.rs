@@ -4,22 +4,26 @@ use uuid::Uuid;
 
 use super::edge::{Edge, EdgeConnection};
 use super::node::Node;
-use crate::multibody::{joints::Joint, MultibodyComponent, MultibodyErrors, MultibodySystem, MultibodyTrait};
+use crate::multibody::{
+    joints::Joint, MultibodyComponent, MultibodyErrors, MultibodySystem, MultibodyTrait,
+};
 use crate::ui::dummies::{DummyComponent, DummyTrait};
 use crate::{MouseButton, MouseButtonReleaseEvents};
 
 pub enum GraphMessage {
     EditComponent(Uuid),
-    ErrorBodyInvalidId(Uuid),
-    ErrorBodyMissingFrom(Uuid),
-    ErrorIdNotFound(Uuid),
-    ErrorNoBase,
-    ErrorNoBaseConnections,    
-    ErrorJointMissingFrom(Uuid),
-    ErrorJointMissingTo(Uuid),
-    ErrorJointNoOuterBody(Uuid),
-    ErrorMultibody(MultibodyErrors),
-    Ok,
+}
+
+pub enum GraphErrors {
+    BodyInvalidId(Uuid),
+    BodyMissingFrom(Uuid),
+    IdNotFound(Uuid),
+    NoBase,
+    NoBaseConnections,
+    JointMissingFrom(Uuid),
+    JointMissingTo(Uuid),
+    JointNoOuterBody(Uuid),
+    Multibody(MultibodyErrors),
 }
 
 #[derive(Debug, Clone)]
@@ -74,7 +78,7 @@ impl Default for Graph {
 }
 
 impl Graph {
-    pub fn create_multibody_system(&mut self) -> (GraphMessage, Option<MultibodySystem>) {
+    pub fn create_multibody_system(&mut self) -> Result<MultibodySystem, GraphErrors> {
         let mut body_counter: usize = 0;
         let mut joint_counter: usize = 0;
 
@@ -93,7 +97,7 @@ impl Graph {
 
         let base = match base {
             Some(base) => base,
-            None => return (GraphMessage::ErrorNoBase, None),
+            None => return Err(GraphErrors::NoBase),
         };
 
         let base_id = base.get_component_id();
@@ -104,12 +108,12 @@ impl Graph {
                     // ensure all joints have a from id
                     let from_id = match joint.get_from_id() {
                         Some(id) => id,
-                        None => return (GraphMessage::ErrorJointMissingFrom(*id), None),
+                        None => return Err(GraphErrors::JointMissingFrom(*id)),
                     };
 
                     // ensure all joints have a to id
                     if joint.get_to_id().is_empty() {
-                        return (GraphMessage::ErrorJointMissingTo(*id), None);
+                        return Err(GraphErrors::JointMissingTo(*id));
                     };
 
                     // if the from id equals the base id, the joint is connected to the base
@@ -121,7 +125,7 @@ impl Graph {
                     // ensure all bodies have a from id
                     match body.get_from_id() {
                         Some(_) => {}
-                        None => return (GraphMessage::ErrorBodyMissingFrom(*id), None),
+                        None => return Err(GraphErrors::BodyMissingFrom(*id)),
                     };
                 }
                 _ => {}
@@ -130,11 +134,11 @@ impl Graph {
 
         // verify something is connected to the base
         if base_joints.is_empty() {
-            return (GraphMessage::ErrorNoBaseConnections, None);
+            return Err(GraphErrors::NoBaseConnections);
         }
 
         // recursively clone, identify, and push the componentns to make the multibody tree
-        let message = self.traverse_component(
+        let result = self.traverse_component(
             base,
             &mut bodies,
             &mut joints,
@@ -142,12 +146,12 @@ impl Graph {
             &mut joint_counter,
         );
 
-        match message {
-            GraphMessage::Ok => {
+        match result {
+            Ok(_)  => {
                 let system = MultibodySystem::new(bodies, joints);
-                return (message, Some(system));
+                return Ok(system)
             }
-            _ => return (message, None),
+            Err(error) => return Err(error),
         }
     }
 
@@ -226,16 +230,16 @@ impl Graph {
         }
     }
 
-    pub fn edit_component(&mut self, dummy: &DummyComponent, component_id: Uuid) -> GraphMessage {
+    pub fn edit_component(&mut self, dummy: &DummyComponent, component_id: Uuid) -> Result<(), GraphErrors> {
         let component = match self.components.get(&component_id) {
             Some(component) => component,
-            None => return GraphMessage::ErrorIdNotFound(component_id),
+            None => return Err(GraphErrors::IdNotFound(component_id)),
         };
 
         if let Some(component) = self.components.get_mut(&component_id) {
             component.inherit_from(dummy);
         }
-        GraphMessage::Ok
+        Ok(())
     }
 
     /// Finds a node within snapping distance of the cursor on the graph, if any.
@@ -504,7 +508,7 @@ impl Graph {
         self.right_clicked_node = None;
     }
 
-    pub fn save_component(&mut self, dummy: &DummyComponent) -> GraphMessage {
+    pub fn save_component(&mut self, dummy: &DummyComponent) -> Result<(), GraphErrors> {
         // only do this if we can save the node
         if let Some(last_cursor_position) = self.last_cursor_position {
             // Generate unique IDs for component, node, and name
@@ -513,13 +517,10 @@ impl Graph {
             let name_id = Uuid::new_v4();
 
             // Create the new component from it's dummy
-            let new_component =
-                match MultibodyComponent::from_dummy(component_id, dummy, node_id) {
-                    Ok(component) => component,
-                    Err(error) => {
-                        return GraphMessage::ErrorMultibody(error)
-                    }
-                };
+            let new_component = match MultibodyComponent::from_dummy(component_id, dummy, node_id) {
+                Ok(component) => component,
+                Err(error) => return Err(GraphErrors::Multibody(error)),
+            };
 
             // Calculate the bounds for the new node
             let size = Size::new(100.0, 50.0); // TODO: make width dynamic based on name length
@@ -534,11 +535,11 @@ impl Graph {
             let new_node = Node::new(bounds);
             let graph_node = GraphNode::new(component_id, new_node);
 
-            // Insert the new component and node into their respective collections            
+            // Insert the new component and node into their respective collections
             self.components.insert(component_id, new_component);
             self.nodes.insert(node_id, graph_node);
         }
-        GraphMessage::Ok
+        Ok(())        
     }
 
     // Recursive function to traverse the components
@@ -549,8 +550,8 @@ impl Graph {
         joints: &mut Vec<Joint>,
         body_counter: &mut usize,
         joint_counter: &mut usize,
-    ) -> GraphMessage {
-        let mut message = GraphMessage::Ok;
+    ) -> Result<(), GraphErrors> {
+        let mut result = Ok(());
         match component {
             MultibodyComponent::Body(body) => {
                 println!("Traversing Body: {:?}", body);
@@ -562,14 +563,10 @@ impl Graph {
                 for joint_id in body.get_to_id() {
                     let joint = match self.components.get(joint_id) {
                         Some(joint) => joint,
-                        None => return GraphMessage::ErrorIdNotFound(*joint_id),
+                        None => return Err(GraphErrors::IdNotFound(*joint_id)),
                     };
-                    message =
+                    result =
                         self.traverse_component(joint, bodies, joints, body_counter, joint_counter);
-                    match message {
-                        GraphMessage::Ok => {}
-                        _ => return message,
-                    }
                 }
             }
 
@@ -583,14 +580,10 @@ impl Graph {
                 for joint_id in base.get_to_id() {
                     let joint = match self.components.get(joint_id) {
                         Some(joint) => joint,
-                        None => return GraphMessage::ErrorIdNotFound(*joint_id),
+                        None => return Err(GraphErrors::IdNotFound(*joint_id)),
                     };
-                    message =
+                    result =
                         self.traverse_component(joint, bodies, joints, body_counter, joint_counter);
-                    match message {
-                        GraphMessage::Ok => {}
-                        _ => return message,
-                    }
                 }
             }
             MultibodyComponent::Joint(joint) => {
@@ -602,18 +595,14 @@ impl Graph {
                 for outer_body_id in joint.get_to_id() {
                     let body = match self.components.get(outer_body_id) {
                         Some(body) => body,
-                        None => return GraphMessage::ErrorIdNotFound(*outer_body_id),
+                        None => return Err(GraphErrors::IdNotFound(*outer_body_id)),
                     };
-                    message =
+                    result =
                         self.traverse_component(body, bodies, joints, body_counter, joint_counter);
-                    match message {
-                        GraphMessage::Ok => {}
-                        _ => return message,
-                    }
                 }
             }
         }
-        message
+        result
     }
 
     pub fn window_resized(&mut self, size: Size) {

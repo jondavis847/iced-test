@@ -263,8 +263,13 @@ impl AppState {
     }
 
     pub fn middle_button_pressed(&mut self, _cursor: Cursor) -> Command<Message> {
-        let (_,system) = self.graph.create_multibody_system();
-        dbg!(system);
+        match self.graph.create_multibody_system() {
+            Ok(system) => dbg!(system),
+            Err(error) => {
+                // TODO: handle error
+                return Command::none()
+            }
+        };
         Command::none()
     }
 
@@ -316,7 +321,6 @@ impl AppState {
 
         //TODO: actually do something with the error/message
         //match graph_message {
-
 
         //}
 

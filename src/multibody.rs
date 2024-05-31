@@ -5,6 +5,7 @@ pub mod body;
 pub mod joints;
 pub mod mass_properties;
 
+use crate::ui::dummies::DummyComponent;
 use base::{Base, BaseErrors};
 use body::{Body, BodyErrors};
 use joints::{
@@ -12,7 +13,6 @@ use joints::{
     Joint,
 };
 
-use crate::ui::dummies::{DummyComponent, DummyTrait};
 #[derive(Debug, Clone)]
 pub struct MultibodyMeta {
     component_id: Uuid,

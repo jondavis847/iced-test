@@ -1,7 +1,7 @@
 use crate::ui::dummies::{DummyBody, DummyComponent, DummyErrors, DummyTrait};
 
 use super::{
-    mass_properties::{MassProperties, MassPropertiesError},
+    mass_properties::{MassProperties, MassPropertiesErrors},
     MultibodyMeta, MultibodyTrait,
 };
 use uuid::Uuid;
@@ -27,9 +27,10 @@ pub struct Body {
     meta: MultibodyMeta,    
 }
 
+#[derive(Debug, Clone, Copy)]
 pub enum BodyErrors {
     DummyErrors(DummyErrors),
-    MassPropertiesError(MassPropertiesError),
+    MassPropertiesErrors(MassPropertiesErrors),
 }
 
 impl Body {
@@ -59,7 +60,7 @@ impl Body {
             dummy.iyz.parse().unwrap_or(0.0),
         ) {
             Ok(mass_properties) => mass_properties,
-            Err(error) => return Err(BodyErrors::MassPropertiesError(error)),
+            Err(error) => return Err(BodyErrors::MassPropertiesErrors(error)),
         };
 
         Ok(Self {
@@ -118,72 +119,57 @@ impl Body {
         self.mass_properties.get_mass()
     }        
 
-    fn set_cmx(&mut self, cmx: f64) -> Result<(),BodyErrors> {
-        match self.mass_properties.set_cmx(cmx) {
-            Err(error) => Err(BodyErrors::MassPropertiesError(error)),
-            Ok(_) => Ok(())
-        }
+    fn set_cmx(&mut self, cmx: f64) {
+        self.mass_properties.set_cmx(cmx);        
     }
 
-    fn set_cmy(&mut self, cmy: f64) -> Result<(),BodyErrors> {
-        match self.mass_properties.set_cmy(cmy) {
-            Err(error) => Err(BodyErrors::MassPropertiesError(error)),
-            Ok(_) => Ok(())
-        }
+    fn set_cmy(&mut self, cmy: f64) {
+        self.mass_properties.set_cmy(cmy);
     }
 
-    fn set_cmz(&mut self, cmz: f64) -> Result<(),BodyErrors> {
-        match self.mass_properties.set_cmx(cmz) {
-            Err(error) => Err(BodyErrors::MassPropertiesError(error)),
-            Ok(_) => Ok(())
-        }
+    fn set_cmz(&mut self, cmz: f64) {
+        self.mass_properties.set_cmz(cmz);
     }
 
     fn set_ixx(&mut self, ixx: f64) -> Result<(),BodyErrors> {
         match self.mass_properties.set_ixx(ixx) {
-            Err(error) => Err(BodyErrors::MassPropertiesError(error)),
+            Err(error) => Err(BodyErrors::MassPropertiesErrors(error)),
             Ok(_) => Ok(())
         }
     }
 
-    fn set_ixy(&mut self, ixy: f64) -> Result<(),BodyErrors> {
-        match self.mass_properties.set_ixy(ixy) {
-            Err(error) => Err(BodyErrors::MassPropertiesError(error)),
-            Ok(_) => Ok(())
-        }
+    fn set_ixy(&mut self, ixy: f64) {
+        self.mass_properties.set_ixy(ixy);
     }
 
-    fn set_ixz(&mut self, ixz: f64) -> Result<(),BodyErrors> {
-        match self.mass_properties.set_ixx(ixz) {
-            Err(error) => Err(BodyErrors::MassPropertiesError(error)),
-            Ok(_) => Ok(())
-        }
+    fn set_ixz(&mut self, ixz: f64) {
+        self.mass_properties.set_ixz(ixz);
     }
 
     fn set_iyy(&mut self, iyy: f64) -> Result<(),BodyErrors> {
         match self.mass_properties.set_iyy(iyy) {
-            Err(error) => Err(BodyErrors::MassPropertiesError(error)),
+            Err(error) => Err(BodyErrors::MassPropertiesErrors(error)),
             Ok(_) => Ok(())
         }
     }
 
     fn set_iyz(&mut self, iyz: f64) -> Result<(),BodyErrors> {
         match self.mass_properties.set_ixx(iyz) {
-            Err(error) => Err(BodyErrors::MassPropertiesError(error)),
+            Err(error) => Err(BodyErrors::MassPropertiesErrors(error)),
             Ok(_) => Ok(())
         }
     }
 
     fn set_izz(&mut self, izz: f64) -> Result<(),BodyErrors> {
         match self.mass_properties.set_izz(izz) {
-            Err(error) => Err(BodyErrors::MassPropertiesError(error)),
+            Err(error) => Err(BodyErrors::MassPropertiesErrors(error)),
             Ok(_) => Ok(())
         }
     }
 
     fn set_mass(&mut self, mass: f64) -> Result<(),BodyErrors> {
         match self.mass_properties.set_mass(mass) {
-            Err(error) => Err(BodyErrors::MassPropertiesError(error)),
+            Err(error) => Err(BodyErrors::MassPropertiesErrors(error)),
             Ok(_) => Ok(())
         }
     }
@@ -230,20 +216,21 @@ impl MultibodyTrait for Body {
         &self.meta.to_id
     }
 
+    //TODO: handle the errors instead of unwrap
     fn inherit_from(&mut self, dummy: &DummyComponent) {
         match dummy {
             DummyComponent::Body(dummy_body) => {
-                self.set_name(dummy.get_name()); //TODO need an error for if name is empty
-                self.set_mass(dummy_body.mass.parse().unwrap_or(1.0));
+                self.set_name(dummy.get_name()); 
+                self.set_mass(dummy_body.mass.parse().unwrap_or(1.0)).unwrap();
                 self.set_cmx(dummy_body.cmx.parse().unwrap_or(0.0));
                 self.set_cmy(dummy_body.cmy.parse().unwrap_or(0.0));
                 self.set_cmz(dummy_body.cmz.parse().unwrap_or(0.0));
-                self.set_ixx(dummy_body.ixx.parse().unwrap_or(1.0));
-                self.set_iyy(dummy_body.iyy.parse().unwrap_or(1.0));
-                self.set_izz(dummy_body.izz.parse().unwrap_or(1.0));
+                self.set_ixx(dummy_body.ixx.parse().unwrap_or(1.0)).unwrap();
+                self.set_iyy(dummy_body.iyy.parse().unwrap_or(1.0)).unwrap();
+                self.set_izz(dummy_body.izz.parse().unwrap_or(1.0)).unwrap();
                 self.set_ixy(dummy_body.ixy.parse().unwrap_or(0.0));
                 self.set_ixz(dummy_body.ixz.parse().unwrap_or(0.0));
-                self.set_iyz(dummy_body.iyz.parse().unwrap_or(0.0));
+                self.set_iyz(dummy_body.iyz.parse().unwrap_or(0.0)).unwrap();
             }
             _ => {} //error! must be a body
         }

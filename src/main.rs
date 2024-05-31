@@ -314,6 +314,7 @@ impl AppState {
             None => self.graph.save_component(&dummy_component),
         };
 
+        //TODO: actually do something with the error/message
         //match graph_message {
 
 
